@@ -1,0 +1,22 @@
+﻿SonTop o'yini 
+Bu dasturda bir nechta kutubxonalardan foydalanilgan va ular quyidagilar
+
+# rich kutubxonasi
+rich==13.9.4
+
+#openpyxl
+va undan tashqari ichki funksiyalar va fayllar 
+
+#helper
+ichida tillar papkasi joylashtirllgan dict ko“rinishda va dastur 4 ta tilda ishlashi uchun maxsus dict ham bor (language_variables)
+
+#myfunctions
+ichida kerakli funksiyalar bor
+
+//choose_language dastur tilini tanlaydi
+//sontop_PC kompyuter son o“ylaydi
+//sontop_USER foydalanuvchi son o“ylaydi
+//play asosiy funksiya bo“lib main katalogida joylashgan va dasturni ishga tushiradi
+
+Oxirida sa game_results papkasida ntijalar saqlanib boriladi exel fayl ko“rinishda (!!! har safar o“yin restart qilinganda avvalgi natijalar o“chiriladi!!!)
+

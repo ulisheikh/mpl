@@ -1,0 +1,35 @@
+# Google Chrome
+wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+sudo apt install ./google-chrome-stable_current_amd64.deb
+
+# Telegram
+sudo apt update
+sudo apt install telegram-desktop
+
+# VirtualBox
+sudo apt update
+sudo apt install virtualbox
+
+# Visual Studio Code
+wget -qO- https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > packages.microsoft.gpg
+sudo install -D -o root -g root -m 644 packages.microsoft.gpg /etc/apt/trusted.gpg.d/
+sudo sh -c 'echo "deb [arch=amd64] https://packages.microsoft.com/repos/code stable main" > /etc/apt/sources.list.d/vscode.list'
+sudo apt install apt-transport-https
+sudo apt update
+sudo apt install code
+
+# Koreys tili shriftlari
+sudo apt update
+sudo apt install fonts-nanum fonts-noto-cjk
+
+# Koreys tili klaviaturasi
+sudo apt install ibus-hangul
+sudo apt install fcitx-hangul
+
+# Bluetooth remove
+sudo systemctl stop bluetooth && sudo apt purge --autoremove -y bluez blueman pulseaudio-module-bluetooth && rm -rf ~/.config/blueman
+
+# Bluetooth install
+sudo apt update && sudo apt install -y bluez blueman pulseaudio-module-bluetooth && sudo systemctl start bluetooth && sudo systemctl enable bluetooth && blueman-applet &
+
+

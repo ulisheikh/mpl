@@ -1,0 +1,2 @@
+from inkapsulyatsiya import Avto
+
