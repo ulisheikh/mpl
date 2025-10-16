@@ -1,0 +1,2 @@
+# mpl
+Mening python darslikarim
