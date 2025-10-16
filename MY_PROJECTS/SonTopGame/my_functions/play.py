@@ -24,7 +24,7 @@ def play(x=10):
         console3.print(f"\n{lang_pack[select_lang]["T15"]} \n>>> ",style= 'cyan'' bold')
         name = input().lower()
         if name:
-            console3.print(f"\n                    {lang_pack[select_lang]["T16"]} {name.lower()} 님 ",style='White bold')
+            console3.print(f"\n                    {lang_pack[select_lang]["T16"]} {name.lower()} ",style='White bold')
             name = name.capitalize()
             break
 
