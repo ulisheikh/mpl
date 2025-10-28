@@ -15,18 +15,24 @@ ltc = {
                   "[grep]":"Boshqa bir buyruqni natijasini olib ikkinnchi buyruq orqali comandalarni bajarish uchun ishlatiladi [quvur]",
                   "[ps]":"Hozirda ishlab turgan barcha process larni ko'rsatib beradi",
                   "[cat]":"Fayl yaratadi (ex: file.txt/.py/.c) va oddiy bir turdagi fayllarni aniq o'qiydi (.txt,.py vahkz)",
-                  "[cat >] [fayl_nomi]":"Aagar fayl bor bo'lsa tozalab yangidan yozadi saqlash uchun ctrl+d bosiladi",
-                  "[cat >>] [file_nomi]":"Kiritilgan faylga yangi ma'lumot yozish uchun",
+                  "[cat >] [file_name]":"Aagar fayl bor bo'lsa tozalab yangidan yozadi saqlash uchun ctrl+d bosiladi",
+                  "[cat >>] [file_name]":"Kiritilgan faylga yangi ma'lumot yozish uchun",
                   "[touch]":"Fayl yaratadi (ex: file.txt/.py/.c)",
                   "[nano]":"Fayl yaratadi)",
                   "[cp]":"Fayl nusxalaydi",
                   "[cp -r]":"Diretory nusxalaydi",
                   "[mv]":"Fayl yoki katalog cut va paste qiladi yoki nomini o'zgartiradi",
                   "[rm]":"Faylni o'chiradi",
-                  "[rm -r]":"Direktory ni o'chiradi (!!! LEKIN JUDA XAVFLI BILMASDAN BUTUN TIZIMNI O'CHIRIB YUBORISH VAXFI JUDA HAM YUQORI !!!)",
+                  "[rm -r]":"Direktory ni o'chiradi (!!! LEKIN JUDA XAVFLI BILMASDAN BUTUN TIZIMNI O'CHIRIB YUBORISH VAXFI JUDA HAM YUQORI !!!)"
                   },
-    "chapter-2" : {
-
+    "chapter-2" : {"[head]":"Text faylning boshini chiqaradi (ex: head -20 fayl_nomi)",
+                   "[tail]":"Text faylning oxirini chiqaradi (ex: tail -20 fayl_nomi)",
+                   "[nl]":"Qatorlarga raqam beradi bu holatda bo'sh qatorlar raqamlanmaydi",
+                   "[nl] -ba":"Qatorlarga raqam beradi hatto bo'sh qatorgga ham ",
+                   "[sed]":"Textning ichidagi biror bir so'zni o'zgartirish yoki tahrirlah uchun foydalaniladi\
+                    [g] opsiyasi qo'yilasa faqat birinchi so'z tahrir agar o'rniga son qo'yilsa shu inex tahrir bo'ladi",
+                   "[more]":"Text faylni o'qiydi cat sifatiga o'xshash chiqish uchun [q] bosiladi",
+                   "[less]":"[more] ga o'xshash lekin funksiyasi ko'proq [/] dan so'ng so'z kiritsa shu so'zni topadi [n] bosilsa keyingisiga o'tadi"
                 },
     "chapter-3" : {
 
@@ -69,9 +75,14 @@ ltc = {
                 }
 }
 
+
 for chapter, commanda in ltc.items():
-    print(f"                    {chapter} komandalar ro'yxati:\n")
+    wrapped_chapter = chapter.strip() 
+    indent = ' ' * 20
+    print(f"{indent}{'='*36}")
+    print(f"{indent}>>>{wrapped_chapter} komandalar ro'yxati:<<<")
+    print(f"{indent}{'='*36}\n")
+    
     for cmd , info in commanda.items():
-        wrapped = textwrap.fill(info.strip(), width=50, subsequent_indent=" " * 8)
-        print(f"    {cmd} : {wrapped}\n{'=' * 75}")
-        print()
+        wrapped = textwrap.fill(info.strip(), width=50, subsequent_indent=" " * 12)
+        print(f"    {cmd} : {wrapped}\n{'_' * 75}\n")
