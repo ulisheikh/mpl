@@ -58,9 +58,18 @@ ltc = {
                    "[dig example.com ns]":"berilgan dns ning name server va ip manzilini ko'rsatib beradi",
                    "[dig example.com mx]":"email uchun qaysi serverlar javob berishini ko'rsatadi",
                    "[dig example.com]":"berilgan saytning ip manzilini qaytaradi",
-                   
+                   "[dnsspoof and eyyercap]":"Tarmoq va hostlarni hack qlish uchun yaxshi toollar"
                 },
-    "chapter-4" : {
+    "chapter-4" : {"[apt-cache search keyword or package_name]":"Bu buyruq orqali berilgan dastur tizimga o'rnatilganmi yo'qmi\
+                    bilish mumkin.Kesh fayllarni ham ko'rsatadi",
+                    "[apt-get install packagename]":"Bu buyruq yangi dasturni o'rnatish uchun foydalaniladi",
+                    "[apt-get remove packkagename]":"Bu dasturlarni o'chirishda ishlatiladigan buyruq lekin konfiguratsiya faylari qoladi",
+                    "[apt-get purge packagename]":"Dasturga qo'shib konfiguratsiya fayllarini ham qo'shib o'chiradi",
+                    "[apt-get autoremove packagename]":"Dastur ishlashi uchun birgalikda o'rnatilgan fayl va kutubxonalargacha o'chiradigan buyruq",
+                    "[apt-update]":"Tizimni bitta yangilaydi va qanday yangilanishlar borligini ko'rsatib beradi lekin o'rnatmaydi",
+                    "[apt-get upgrade]":"Tizimdagi barcha yangilanishlarni yangi versiyasi bilan o'rnatadi",
+                    "[sources.list (root_file)]":"Dasturiy ta'minot uchun repositoriya",
+                    "[synaptic]":"Packagelarni boshqarish uchun interface"                    
 
                 },
     "chapter-5" : {
