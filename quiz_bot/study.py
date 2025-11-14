@@ -353,45 +353,74 @@ async def cmd_info(msg: types.Message):
 async def cb_menu(cq: types.CallbackQuery):
     data = cq.data
     uid = cq.message.chat.id
+
+    # --- QUIZ BOSHLASH ---
     if data == "menu_quiz":
         await cq.message.answer("Quiz boshlanmoqda...", reply_markup=main_kb)
-        # start an ad-hoc single question
         await send_single_question(uid)
+
+    # --- BO‘LIMLARNI KO‘RISH (MENU_VIEW) ---
     elif data == "menu_view":
         chapters = list(load_ltc_from_py().keys())
+
         if not chapters:
             await cq.message.answer("Hozircha bo'limlar mavjud emas.", reply_markup=main_kb)
             await cq.answer()
             return
-        kb = InlineKeyboardMarkup(row_width=2)
-        for ch in chapters:
-            kb.add(InlineKeyboardButton(ch, callback_data=f"view::{ch}"))
+
+        # Aiogram 3.x uchun to‘g‘ri InlineKeyboardMarkup
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=ch,
+                        callback_data=f"view::{ch}"
+                    )
+                ] for ch in chapters
+            ]
+        )
+
         await cq.message.answer("Bo‘limni tanlang:", reply_markup=kb)
+
+    # --- TANLANGAN BO‘LIM ICHIDAGI SAVOLLARNI KO‘RISH ---
     elif data and data.startswith("view::"):
         ch = data.split("::", 1)[1]
         ltc_local = load_ltc_from_py()
+
         if ch in ltc_local:
             text = "\n".join(f"{k} ➤ {v}" for k, v in ltc_local[ch].items())
             await cq.message.answer(f"📘 {ch}\n\n{text}", reply_markup=main_kb)
         else:
             await cq.message.answer("Bunday bo‘lim topilmadi.", reply_markup=main_kb)
+
+    # --- BALLAR BO‘LIMI ---
     elif data == "menu_score":
         sc = state.get(str(uid), {}).get("score", 0)
         await cq.message.answer(f"Sizning ballingiz: {sc}", reply_markup=main_kb)
+
+    # --- TC.PY NI QAYTA YUKLASH ---
     elif data == "menu_reload":
         load_ltc_from_py.cached_mtime = None
         _ = load_ltc_from_py()
         await cq.message.answer("tc.py qayta yuklandi.", reply_markup=main_kb)
+
+    # --- QUIZNI TO‘XTATISH ---
     elif data == "menu_stop":
-        st = state.setdefault(str(uid), {"asked": [], "current": None, "current_mode": None,
-                                        "in_block": False, "remaining": 0, "next_time": None,
-                                        "score": 0, "auto": False})
+        st = state.setdefault(str(uid), {
+            "asked": [], "current": None, "current_mode": None,
+            "in_block": False, "remaining": 0, "next_time": None,
+            "score": 0, "auto": False
+        })
+
         st["in_block"] = False
         st["remaining"] = 0
         st["current"] = None
         st["current_mode"] = None
         save_state(state)
+
         await cq.message.answer("Quiz to‘xtatildi.", reply_markup=main_kb)
+
+    # --- JAVOB QAYTARISH ---
     await cq.answer()
 
 # -------------------------
