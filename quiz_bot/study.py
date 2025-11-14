@@ -1,4 +1,4 @@
-# study.py  (Aiogram 3) — Final with requested changes
+# study.py  (Aiogram 3) — Final with UNSUBSCRIBE STOP fix
 import asyncio
 import importlib.util
 import json
@@ -250,6 +250,11 @@ def compute_next_time(after_dt: Optional[datetime] = None) -> datetime:
         minutes = BLOCK_INTERVAL_MIN
     return now + timedelta(minutes=minutes)
 
+# ---------- STOP inline keyboard (for continuous mode) ----------
+stop_quiz_kb = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text="🛑 STOP", callback_data="menu_stop")]
+])
+
 # ---------- send functions (keyboard handling improved) ----------
 async def send_single_question(chat_id: str):
     """Ad-hoc single question (for /quiz or continuous mode) — sets current_mode='single'"""
@@ -263,8 +268,12 @@ async def send_single_question(chat_id: str):
     st["current"] = key
     st["current_mode"] = "single"
     save_state(state)
-    # Do not override user's reply keyboard here — keep main_kb visible
-    await bot.send_message(chat_id, f"📘 <b>{chapter}</b>\n\nSavol:\n{desc}\n\nJavob yozing.", parse_mode="HTML")
+    # CHANGED: If user is in continuous (unsubscribe) mode, show STOP inline button
+    if st.get("continuous"):
+        await bot.send_message(chat_id, f"📘 <b>{chapter}</b>\n\nSavol:\n{desc}\n\nJavob yozing.", parse_mode="HTML", reply_markup=stop_quiz_kb)
+    else:
+        # Do not override user's reply keyboard here — keep main_kb visible
+        await bot.send_message(chat_id, f"📘 <b>{chapter}</b>\n\nSavol:\n{desc}\n\nJavob yozing.", parse_mode="HTML")
 
 async def start_block_for_user(chat_id: str, questions_count: int = QUESTIONS_PER_BLOCK):
     """Initialize a block for user: set in_block and remaining and send first question."""
