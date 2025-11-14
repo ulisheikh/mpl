@@ -1,4 +1,4 @@
-# study.py  (Aiogram 3) — Updated: balanced questions, time rules, persistent keyboards, back-navigation
+# study.py  (Aiogram 3) — Final with requested changes
 import asyncio
 import importlib.util
 import json
@@ -6,6 +6,7 @@ import logging
 import pathlib
 import random
 import re
+import sqlite3
 import time
 from datetime import datetime, timedelta
 from typing import Dict, Tuple, Optional
@@ -19,12 +20,13 @@ from aiogram.types import (
 )
 
 # ------------- CONFIG -------------
-BOT_TOKEN = "8284065959:AAEB1_8uVcXpMZCCQEfM8g2ZjKrDOh4ytY4"  # <-- YOUR TOKEN (you provided)
+BOT_TOKEN = "8284065959:AAEB1_8uVcXpMZCCQEfM8g2ZjKrDOh4ytY4"  # <-- YOUR TOKEN
 TC_PY = "tc.py"
 STATE_FILE = "quiz_state.json"
 BLOCK_INTERVAL_MIN = 12         # default interval in minutes (used outside 08:00-16:00)
 QUESTIONS_PER_BLOCK = 5         # blokdagi savol soni
 RELOAD_CHECK_SECONDS = 3        # tc.py ni tekshirish intervalli
+USERS_DB = "users.db"
 # ----------------------------------
 
 logging.basicConfig(level=logging.INFO)
@@ -38,19 +40,6 @@ STATE_PATH = DATA_DIR / STATE_FILE
 TC_PATH = DATA_DIR / TC_PY
 
 # ---------- persistent state ----------
-# structure per chat_id:
-# {
-#   "unasked": [norm_key, ...],   # CHANGED: list of normalized keys not yet asked (balanced)
-#   "asked": [norm_key,...],      # optional archive
-#   "current": original_key or None,
-#   "current_mode": "block"|"single"|None,
-#   "in_block": bool,
-#   "remaining": int,
-#   "next_time": iso or None,
-#   "score": int,
-#   "auto": bool,
-#   "menu_stack": [callback_id,...]  # CHANGED: for navigation
-# }
 def load_state() -> Dict:
     if STATE_PATH.exists():
         try:
@@ -63,6 +52,62 @@ def save_state(s: Dict):
     STATE_PATH.write_text(json.dumps(s, ensure_ascii=False, indent=2), encoding="utf-8")
 
 state = load_state()
+
+# ---------- SQLite users DB ----------
+def init_db():
+    conn = sqlite3.connect(USERS_DB)
+    cur = conn.cursor()
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER UNIQUE,
+        username TEXT,
+        full_name TEXT,
+        joined_at TEXT,
+        last_active TEXT,
+        is_subscribed INTEGER DEFAULT 0
+    )
+    """)
+    conn.commit()
+    conn.close()
+
+def add_or_update_user(user: types.User, is_subscribed: Optional[bool]=None):
+    conn = sqlite3.connect(USERS_DB)
+    cur = conn.cursor()
+    uid = user.id
+    username = user.username or ""
+    full_name = (user.full_name or "").strip()
+    now = datetime.now().isoformat()
+    # insert or update
+    cur.execute("SELECT user_id FROM users WHERE user_id = ?", (uid,))
+    row = cur.fetchone()
+    if not row:
+        cur.execute(
+            "INSERT INTO users (user_id, username, full_name, joined_at, last_active, is_subscribed) VALUES (?, ?, ?, ?, ?, ?)",
+            (uid, username, full_name, now, now, 1 if is_subscribed else 0)
+        )
+    else:
+        if is_subscribed is None:
+            cur.execute("UPDATE users SET username = ?, full_name = ?, last_active = ? WHERE user_id = ?", (username, full_name, now, uid))
+        else:
+            cur.execute("UPDATE users SET username = ?, full_name = ?, last_active = ?, is_subscribed = ? WHERE user_id = ?", (username, full_name, now, 1 if is_subscribed else 0, uid))
+    conn.commit()
+    conn.close()
+
+def set_subscription_db(user_id: int, is_sub: bool):
+    conn = sqlite3.connect(USERS_DB)
+    cur = conn.cursor()
+    cur.execute("UPDATE users SET is_subscribed = ?, last_active = ? WHERE user_id = ?", (1 if is_sub else 0, datetime.now().isoformat(), user_id))
+    conn.commit()
+    conn.close()
+
+def get_all_users(limit: int = 200):
+    conn = sqlite3.connect(USERS_DB)
+    cur = conn.cursor()
+    cur.execute("SELECT user_id, username, full_name, joined_at, last_active, is_subscribed FROM users ORDER BY joined_at DESC LIMIT ?", (limit,))
+    rows = cur.fetchall()
+    conn.close()
+    return rows
 
 # ---------- load tc.py dynamically ----------
 def load_ltc_from_py() -> Dict[str, Dict[str, str]]:
@@ -123,6 +168,7 @@ def ensure_chat_state_initialized(chat_id: str, flat_questions):
     st.setdefault("score", 0)
     st.setdefault("auto", False)
     st.setdefault("menu_stack", [])
+    st.setdefault("continuous", False)  # CHANGED: continuous mode for unsubscribe
     # unasked: if not present, fill with normalized keys of flat_questions (shuffled)
     if "unasked" not in st or not isinstance(st["unasked"], list):
         keys = []
@@ -206,7 +252,7 @@ def compute_next_time(after_dt: Optional[datetime] = None) -> datetime:
 
 # ---------- send functions (keyboard handling improved) ----------
 async def send_single_question(chat_id: str):
-    """Ad-hoc single question (for /quiz) — sets current_mode='single'"""
+    """Ad-hoc single question (for /quiz or continuous mode) — sets current_mode='single'"""
     try:
         chapter, key, desc = pick_random_question(str(chat_id))
     except RuntimeError:
@@ -217,16 +263,15 @@ async def send_single_question(chat_id: str):
     st["current"] = key
     st["current_mode"] = "single"
     save_state(state)
-    # CHANGED: Do not override user's reply keyboard here — keep main_kb visible
+    # Do not override user's reply keyboard here — keep main_kb visible
     await bot.send_message(chat_id, f"📘 <b>{chapter}</b>\n\nSavol:\n{desc}\n\nJavob yozing.", parse_mode="HTML")
 
-async def start_block_for_user(chat_id: str):
+async def start_block_for_user(chat_id: str, questions_count: int = QUESTIONS_PER_BLOCK):
     """Initialize a block for user: set in_block and remaining and send first question."""
     st = state.setdefault(str(chat_id), {})
     st["in_block"] = True
-    st["remaining"] = QUESTIONS_PER_BLOCK
+    st["remaining"] = questions_count
     st["current_mode"] = "block"
-    # While in block, we generally clear next_time to avoid scheduler starting another block concurrently
     st["next_time"] = None
     save_state(state)
     await send_next_in_block(chat_id)
@@ -251,10 +296,9 @@ async def send_next_in_block(chat_id: str):
     st["current"] = key
     st["current_mode"] = "block"
     save_state(state)
-    # CHANGED: keep reply keyboard persistent by NOT passing reply_markup here
-    # If you prefer an inline "Stop" button during block, you can add InlineKeyboard here.
+    # keep reply keyboard persistent by NOT passing reply_markup here
     inline_kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔚 Stop block", callback_data="menu_stop")]
+        [InlineKeyboardButton(text="🔚 Stop", callback_data="menu_stop")]
     ])
     await bot.send_message(chat_id, f"📘 <b>{chapter}</b>\n\nSavol:\n{desc}\n\nJavob yozing.", parse_mode="HTML", reply_markup=inline_kb)
 
@@ -265,7 +309,6 @@ async def finish_block(chat_id: str):
     st["remaining"] = 0
     st["current"] = None
     st["current_mode"] = None
-    # schedule next block after computed interval
     next_dt = compute_next_time(datetime.now())
     st["next_time"] = next_dt.isoformat()
     save_state(state)
@@ -287,88 +330,120 @@ def evaluate_answer(user_text: str, correct_key: str):
     return False, f"❌ Noto‘g‘ri. Toʻgʻri buyruq: <code>{correct_key}</code>"
 
 # ---------- keyboards ----------
-# main reply keyboard (keeps present)
+# main reply keyboard:
+# Row1: START
+# Row2: MENU | /restart
 main_kb = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text="/start"), KeyboardButton(text="/help")]],
+    keyboard=[
+        [KeyboardButton(text="/start")],
+        [KeyboardButton(text="Menu"), KeyboardButton(text="/restart")]
+    ],
     resize_keyboard=True
 )
 
 def main_menu_markup():
+    # Inline menu with 3x2 layout: left column: subscribe, unsubscribe, ballarim
+    # right column: info, chapters, rank (variant B)
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Boshlash — Quiz", callback_data="menu_quiz"),
-         InlineKeyboardButton(text="Bo‘limlarni ko‘rish", callback_data="menu_view")],
-        [InlineKeyboardButton(text="Ballarim", callback_data="menu_score"),
-         InlineKeyboardButton(text="Reload tc.py", callback_data="menu_reload")],
-        [InlineKeyboardButton(text="To‘xtatish", callback_data="menu_stop")]
+        [InlineKeyboardButton(text="SUBSCRIBE", callback_data="subscribe"),
+         InlineKeyboardButton(text="INFO", callback_data="menu_info")],
+        [InlineKeyboardButton(text="UNSUBSCRIBE", callback_data="unsubscribe"),
+         InlineKeyboardButton(text="CHAPTERLAR", callback_data="menu_chapters")],
+        [InlineKeyboardButton(text="BALLARIM", callback_data="menu_score"),
+         InlineKeyboardButton(text="RANK", callback_data="menu_rank")]
     ])
 
 # ---------- handlers ----------
-@dp.message(F.text.in_({"/start", "/help"}))
-async def cmd_start_help(msg: types.Message):
+@dp.message(F.text == "/start")
+async def cmd_start(msg: types.Message):
+    # record user
+    add_or_update_user(msg.from_user)
     help_text = (
         "👋 Assalomu alaykum! Men Linux buyruqlari quiz-botman.\n\n"
-        "/quiz — bitta savol oladi\n"
-        "/quiz3 — ketma-ket 3 savol oladi (har biriga javobni kutadi)\n"
-        "/subscribe — avtomatik bloklarni (soatga mos) yoqish\n"
-        "/unsubscribe — avtomatik bloklarni o‘chirish\n"
-        "/reload — tc.py qayta yuklash\n"
-        "/info <buyruq> — buyruq izohi\n"
-        "/view <chapter> — bo‘limni ko‘rish\n\n"
-        "Har blok: 5 savol. Bot har savolga javobingizni kutadi, keyin keyingisiga o‘tadi."
+        "Botni boshlash uchun Menu tugmasini bosing yoki START tugmasi orqali tez ishga tushiring.\n\n"
+        "• SUBSCRIBE — avtomatik bloklarni yoqish\n"
+        "• UNSUBSCRIBE — cheksiz savol rejimi (Stop tugmasigacha)\n"
+        "• BALLARIM — ballaringizni ko‘rish\n"
+        "• INFO — buyruqlar haqida ma'lumot\n"
+        "• CHAPTERLAR — bo‘limlar\n"
+        "• RANK — reyting (Variant B)\n"
     )
-    # Show both reply keyboard and menu inline buttons
+    # send initial info + inline menu
     await msg.answer(help_text, reply_markup=main_kb)
+    await msg.answer("Menu:", reply_markup=main_menu_markup())
+
+@dp.message(F.text == "/restart")
+async def cmd_restart(msg: types.Message):
+    uid = str(msg.chat.id)
+    # clear chat state for this user
+    state[uid] = {
+        "asked": [], "unasked": [], "current": None, "current_mode": None,
+        "in_block": False, "remaining": 0, "next_time": None,
+        "score": 0, "auto": False, "menu_stack": [], "continuous": False
+    }
+    save_state(state)
+    # reset DB subscription flag for user (optional)
+    try:
+        set_subscription_db(msg.from_user.id, False)
+    except Exception:
+        pass
+    await msg.answer("🔄 Bot holati tozalandi. Hammasi 0 dan boshlandi.", reply_markup=main_kb)
+
+@dp.message(F.text == "Menu")
+async def msg_menu(msg: types.Message):
+    add_or_update_user(msg.from_user)
     await msg.answer("Menu:", reply_markup=main_menu_markup())
 
 @dp.message(F.text == "/quiz")
 async def cmd_quiz(msg: types.Message):
+    add_or_update_user(msg.from_user)
     await send_single_question(msg.chat.id)
 
-@dp.message(F.text == "/quiz3")
-async def cmd_quiz3(msg: types.Message):
-    uid = str(msg.chat.id)
-    st = state.setdefault(uid, {})
-    if st.get("in_block"):
-        await msg.answer("Siz hozir blok ichidasiz — avvalgi blokni tugating yoki /stop qiling.", reply_markup=main_kb)
-        return
-    st["in_block"] = True
-    st["remaining"] = 3
-    st["current_mode"] = "block"
-    st["next_time"] = None
-    save_state(state)
-    await send_next_in_block(uid)
+# remove /quiz3 per request (not used)
 
 @dp.message(F.text == "/subscribe")
 async def cmd_subscribe(msg: types.Message):
     uid = str(msg.chat.id)
     st = state.setdefault(uid, {})
     st["auto"] = True
-    # schedule first block soon (immediately)
+    st["continuous"] = False
     st["next_time"] = datetime.now().isoformat()
     save_state(state)
+    set_subscription_db(msg.from_user.id, True)
+    add_or_update_user(msg.from_user, is_subscribed=True)
     await msg.answer("✅ Avtomatik bloklar yoqildi. Vaqt qoidalariga ko‘ra bloklar keladi.", reply_markup=main_kb)
 
 @dp.message(F.text == "/unsubscribe")
 async def cmd_unsubscribe(msg: types.Message):
     uid = str(msg.chat.id)
     st = state.setdefault(uid, {})
+    # continuous mode: send questions without scheduling until stopped
     st["auto"] = False
+    st["continuous"] = True
+    st["in_block"] = False
+    st["remaining"] = 0
+    st["current_mode"] = None
     st["next_time"] = None
     save_state(state)
-    await msg.answer("❌ Avtomatik bloklar o‘chirildi.", reply_markup=main_kb)
+    set_subscription_db(msg.from_user.id, False)
+    add_or_update_user(msg.from_user, is_subscribed=False)
+    # start first question immediately
+    await msg.answer("🔁 Cheksiz savol rejimi yoqildi. To‘xtatish uchun Stop tugmasini bosing (inline).", reply_markup=main_kb)
+    await asyncio.sleep(0.5)
+    await send_single_question(uid)
 
 # -------------------------
-# /view handler (view a chapter or list chapters)
+# /view handler (via text command)
 # -------------------------
 @dp.message(F.text.startswith("/view"))
 async def cmd_view(msg: types.Message):
+    add_or_update_user(msg.from_user)
     parts = (msg.text or "").split(maxsplit=1)
     if len(parts) == 1:
         chapters = list(load_ltc_from_py().keys())
         if not chapters:
             await msg.answer("Hozircha bo'limlar mavjud emas.", reply_markup=main_kb)
             return
-        # show chapters as inline keyboard with Back to menu
         kb = InlineKeyboardMarkup(inline_keyboard=[
             *[[InlineKeyboardButton(text=ch, callback_data=f"view::{ch}") ] for ch in chapters],
             [InlineKeyboardButton(text="⬅️ Orqaga", callback_data="back_to_menu")]
@@ -384,17 +459,14 @@ async def cmd_view(msg: types.Message):
     for k, v in ltc_local[chapter].items():
         lines.append(f"{k} ➤ {v}")
     text = "\n".join(lines)
-    # add back-to-chapters button
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="⬅️ Orqaga", callback_data="back_to_chapters")],
     ])
     await msg.answer(f"📘 <b>{chapter}</b>\n\n{text}", parse_mode="HTML", reply_markup=kb)
 
-# -------------------------
-# /info handler (info about a specific command)
-# -------------------------
 @dp.message(F.text.startswith("/info"))
 async def cmd_info(msg: types.Message):
+    add_or_update_user(msg.from_user)
     parts = (msg.text or "").split(maxsplit=1)
     if len(parts) == 1:
         await msg.answer("Iltimos: /info <buyruq> (masalan: /info apt-get purge)", reply_markup=main_kb)
@@ -424,101 +496,113 @@ async def cmd_info(msg: types.Message):
 async def cb_menu(cq: types.CallbackQuery):
     data = cq.data
     uid = str(cq.message.chat.id)
+    add_or_update_user(cq.from_user)
 
-    # --- QUIZ BOSHLASH ---
-    if data == "menu_quiz":
-        # push to menu_stack: remember where we came from (menu)
+    # SUBSCRIBE (inline) -> same as /subscribe
+    if data == "subscribe":
         st = state.setdefault(uid, {})
-        st.setdefault("menu_stack", [])
-        st["menu_stack"].append("menu")  # CHANGED: simple stack marker
+        st["auto"] = True
+        st["continuous"] = False
+        st["next_time"] = datetime.now().isoformat()
         save_state(state)
-        await cq.message.answer("Quiz boshlanmoqda...")
+        set_subscription_db(cq.from_user.id, True)
+        await cq.message.answer("✅ Avtomatik bloklar yoqildi.", reply_markup=main_kb)
+
+    # UNSUBSCRIBE (inline) -> continuous mode
+    elif data == "unsubscribe":
+        st = state.setdefault(uid, {})
+        st["auto"] = False
+        st["continuous"] = True
+        st["in_block"] = False
+        st["remaining"] = 0
+        st["current_mode"] = None
+        st["next_time"] = None
+        save_state(state)
+        set_subscription_db(cq.from_user.id, False)
+        await cq.message.answer("🔁 Cheksiz savol rejimi yoqildi. To‘xtatish uchun Stop tugmasini bosing.", reply_markup=main_kb)
+        await asyncio.sleep(0.5)
         await send_single_question(uid)
 
-    # --- BO‘LIMLARNI KO‘RISH (MENU_VIEW) ---
-    elif data == "menu_view":
-        chapters = list(load_ltc_from_py().keys())
+    # BALLARIM
+    elif data == "menu_score":
+        sc = state.get(str(uid), {}).get("score", 0)
+        await cq.message.answer(f"Sizning ballingiz: {sc}", reply_markup=main_kb)
 
+    # INFO
+    elif data == "menu_info":
+        await cq.message.answer("Info: /info <buyruq> bilan buyruq haqida ma'lumot oling.", reply_markup=main_kb)
+
+    # CHAPTERLAR
+    elif data == "menu_chapters":
+        chapters = list(load_ltc_from_py().keys())
         if not chapters:
             await cq.message.answer("Hozircha bo'limlar mavjud emas.", reply_markup=main_kb)
             await cq.answer()
             return
-
-        # InlineKeyboardMarkup with back button
-        kb = InlineKeyboardMarkup(
-            inline_keyboard=[
-                *[[InlineKeyboardButton(text=ch, callback_data=f"view::{ch}") ] for ch in chapters],
-                [InlineKeyboardButton(text="⬅️ Orqaga", callback_data="back_to_menu")]
-            ]
-        )
-
-        # push to menu stack
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            *[[InlineKeyboardButton(text=ch, callback_data=f"view::{ch}") ] for ch in chapters],
+            [InlineKeyboardButton(text="⬅️ Orqaga", callback_data="back_to_menu")]
+        ])
+        # push to stack
         st = state.setdefault(uid, {})
         st.setdefault("menu_stack", [])
-        st["menu_stack"].append("menu_view")
+        st["menu_stack"].append("menu_chapters")
         save_state(state)
-
         await cq.message.answer("Bo‘limni tanlang:", reply_markup=kb)
 
-    # --- TANLANGAN BO‘LIM ICHIDAGI SAVOLLARNI KO‘RISH ---
+    # RANK (variant B)
+    elif data == "menu_rank":
+        # simple rank: order by score from state (in-memory)
+        # build list
+        ranks = []
+        for k, info in state.items():
+            ranks.append((k, info.get("score", 0)))
+        ranks.sort(key=lambda x: x[1], reverse=True)
+        top_lines = []
+        for i, (chatid, sc) in enumerate(ranks[:10], start=1):
+            top_lines.append(f"{i}. {chatid} — {sc} ball")
+        text = "🏆 Top:\n" + ("\n".join(top_lines) if top_lines else "Hozircha hech kim yo'q.")
+        await cq.message.answer(text, reply_markup=main_kb)
+
+    # view::chapter handled elsewhere (same as previous)
     elif data and data.startswith("view::"):
         ch = data.split("::", 1)[1]
         ltc_local = load_ltc_from_py()
-
         if ch in ltc_local:
             text = "\n".join(f"{k} ➤ {v}" for k, v in ltc_local[ch].items())
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="⬅️ Orqaga", callback_data="back_to_chapters")]
             ])
-            # push to stack
             st = state.setdefault(uid, {})
             st.setdefault("menu_stack", [])
             st["menu_stack"].append(f"view::{ch}")
             save_state(state)
-
             await cq.message.answer(f"📘 {ch}\n\n{text}", reply_markup=kb)
         else:
             await cq.message.answer("Bunday bo‘lim topilmadi.", reply_markup=main_kb)
 
-    # --- BALLAR BO‘LIMI ---
-    elif data == "menu_score":
-        sc = state.get(str(uid), {}).get("score", 0)
-        await cq.message.answer(f"Sizning ballingiz: {sc}", reply_markup=main_kb)
-
-    # --- TC.PY NI QAYTA YUKLASH ---
-    elif data == "menu_reload":
-        load_ltc_from_py.cached_mtime = None
-        _ = load_ltc_from_py()
-        await cq.message.answer("tc.py qayta yuklandi.", reply_markup=main_kb)
-
-    # --- QUIZNI TO‘XTATISH ---
+    # STOP (used to stop blocks or continuous mode)
     elif data == "menu_stop":
-        st = state.setdefault(uid, {
-            "asked": [], "current": None, "current_mode": None,
-            "in_block": False, "remaining": 0, "next_time": None,
-            "score": 0, "auto": False, "menu_stack": []
-        })
-
+        st = state.setdefault(uid, {})
         st["in_block"] = False
         st["remaining"] = 0
         st["current"] = None
         st["current_mode"] = None
+        st["continuous"] = False
+        st["auto"] = False
+        st["next_time"] = None
         save_state(state)
-
         await cq.message.answer("Quiz to‘xtatildi.", reply_markup=main_kb)
 
-    # --- NAVIGATION: back to menu / chapters (CHANGED) ---
+    # BACK navigation
     elif data == "back_to_menu":
-        # Clear stack and show main menu
         st = state.setdefault(uid, {})
         st["menu_stack"] = []
         save_state(state)
         await cq.message.answer("Menu:", reply_markup=main_menu_markup())
 
     elif data == "back_to_chapters":
-        # pop last (should be view::<ch>) and show chapters list again
         st = state.setdefault(uid, {})
-        # remove last element if present and show chapters list
         if st.get("menu_stack"):
             st["menu_stack"].pop()
         chapters = list(load_ltc_from_py().keys())
@@ -533,7 +617,6 @@ async def cb_menu(cq: types.CallbackQuery):
         save_state(state)
         await cq.message.answer("Bo‘limni tanlang:", reply_markup=kb)
 
-    # ensure we answer callback to remove loading state in client
     await cq.answer()
 
 # -------------------------
@@ -543,40 +626,61 @@ async def cb_menu(cq: types.CallbackQuery):
 async def generic_handler(msg: types.Message):
     text = (msg.text or "").strip()
     uid = str(msg.chat.id)
+    add_or_update_user(msg.from_user)  # update activity on any message
     st = state.setdefault(uid, {})
     cur = st.get("current")
     if cur:
         is_ok, feedback = evaluate_answer(text, cur)
-        # CHANGED: do not override main keyboard when sending feedback; send feedback plainly
         await msg.answer(feedback, parse_mode="HTML")
         if is_ok:
             st["score"] = st.get("score", 0) + 1
-        # After answering: behavior depends on mode
         mode = st.get("current_mode")
-        # clear current
         st["current"] = None
         save_state(state)
+        # If continuous mode (unsubscribe), send next question immediately after answer
+        if st.get("continuous"):
+            await asyncio.sleep(0.5)
+            await send_single_question(uid)
+            return
         if mode == "block" and st.get("in_block"):
-            # decrement remaining and either send next or finish block
             st["remaining"] = max(0, st.get("remaining", 0) - 1)
             save_state(state)
             if st.get("remaining", 0) > 0:
-                # send next question in same block (wait-for-answer behavior satisfied)
                 await asyncio.sleep(0.8)
                 await send_next_in_block(uid)
             else:
                 await finish_block(uid)
         else:
-            # single question mode: do not automatically send another unless user asks /quiz
             st["current_mode"] = None
             save_state(state)
         return
 
     # no active question => commands / fallback
     low = text.lower()
-    if low in ("/start", "/help"):
-        await cmd_start_help(msg)
+    if low == "/start":
+        await cmd_start(msg)
         return
+    if low == "/restart":
+        await cmd_restart(msg)
+        return
+    if low == "menu":
+        await msg_menu(msg)
+        return
+    # support /users to view DB users (admin can use)
+    if low == "/users":
+        rows = get_all_users(200)
+        lines = []
+        for r in rows:
+            uid_r, uname, fulln, joined, last_active, is_sub = r
+            lines.append(f"{uid_r} | @{uname or '-'} | {fulln or '-'} | sub:{is_sub} | last:{last_active}")
+        if not lines:
+            await msg.answer("Hech qanday foydalanuvchi topilmadi.", reply_markup=main_kb)
+        else:
+            # send chunked if long
+            chunk = "\n".join(lines[:100])
+            await msg.answer(f"Users (top {min(len(lines),100)}):\n{chunk}", reply_markup=main_kb)
+        return
+
     if low.startswith("/view"):
         await cmd_view(msg)
         return
@@ -584,25 +688,18 @@ async def generic_handler(msg: types.Message):
         await cmd_info(msg)
         return
 
-    await msg.answer("Hozir savol yo‘q. /quiz bilan boshlang yoki /help ni bosing.", reply_markup=main_kb)
+    await msg.answer("Hozir savol yo‘q. Menu tugmasini bosing yoki /start ni bosing.", reply_markup=main_kb)
 
 # ---------- scheduler ----------
 async def scheduler_loop():
-    """
-    Scheduler checks all users with 'auto' True and 'next_time' set.
-    If now >= next_time and user not in active block, start a block.
-    """
-    # ensure initial load
     load_ltc_from_py()
     while True:
         try:
             _ = load_ltc_from_py()
             now = datetime.now()
             for uid, info in list(state.items()):
-                # only for subscribed users
                 if not info.get("auto"):
                     continue
-                # if currently in block, skip (block manages itself)
                 if info.get("in_block"):
                     continue
                 nxt = info.get("next_time")
@@ -611,13 +708,11 @@ async def scheduler_loop():
                 try:
                     nxt_dt = datetime.fromisoformat(nxt)
                 except Exception:
-                    # repair invalid value
                     state[uid]["next_time"] = None
                     save_state(state)
                     continue
                 if now >= nxt_dt:
                     logger.info("Starting block for %s (scheduled)", uid)
-                    # start block (non-blocking)
                     asyncio.create_task(start_block_for_user(uid))
             await asyncio.sleep(RELOAD_CHECK_SECONDS)
         except Exception as e:
@@ -638,7 +733,7 @@ async def main():
     if not BOT_TOKEN:
         print("TOKEN kiritilmagan!")
         return
-    # start background tasks
+    init_db()
     asyncio.create_task(scheduler_loop())
     asyncio.create_task(auto_reload_loop())
     await dp.start_polling(bot)
