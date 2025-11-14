@@ -110,22 +110,47 @@ def pick_random_question(chat_id: str) -> Tuple[str, str, str]:
     global state
     ltc_local = load_ltc_from_py()
     FLAT = flatten_ltc(ltc_local)
+
     if not FLAT:
         raise RuntimeError("Savollar topilmadi — tc.py ni to'ldiring.")
-    st = state.setdefault(chat_id, {"asked": [], "current": None, "current_mode": None,
-                                    "in_block": False, "remaining": 0, "next_time": None,
-                                    "score": 0, "auto": False})
-    asked = set(st.get("asked", []))
-    choices = [item for item in FLAT if normalize_for_compare(item[1]) not in asked and normalize_for_compare(item[1]) != ""]
+
+    # --- SAFE INITIALIZATION FOR RAILWAY / LOCAL ---
+    st = state.setdefault(chat_id, {})
+
+    st.setdefault("asked", [])
+    st.setdefault("current", None)
+    st.setdefault("current_mode", None)
+    st.setdefault("in_block", False)
+    st.setdefault("remaining", 0)
+    st.setdefault("next_time", None)
+    st.setdefault("score", 0)
+    st.setdefault("auto", False)
+
+    # --- SELECT QUESTION WITHOUT REPEATS ---
+    asked = set(st["asked"])
+
+    # Filter only questions not asked yet
+    choices = [
+        item for item in FLAT
+        if normalize_for_compare(item[1]) not in asked
+        and normalize_for_compare(item[1]) != ""
+    ]
+
+    # If nothing left → reset asked list
     if not choices:
-        # reset asked history
         st["asked"] = []
         asked = set()
         choices = FLAT.copy()
+
     chapter, key, desc = random.choice(choices)
+
+    # Record as asked
     st["asked"].append(normalize_for_compare(key))
+
     save_state(state)
+
     return chapter, key, desc
+
 
 # ---------- send functions ----------
 async def send_single_question(chat_id: str):
