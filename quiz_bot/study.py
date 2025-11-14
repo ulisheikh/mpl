@@ -1,4 +1,4 @@
-# study.py  (Aiogram 3) — Scheduled blocks (12 min) x 5 questions per block, wait-for-answer behavior
+# study.py  (Aiogram 3) — Updated: balanced questions, time rules, persistent keyboards, back-navigation
 import asyncio
 import importlib.util
 import json
@@ -19,10 +19,10 @@ from aiogram.types import (
 )
 
 # ------------- CONFIG -------------
-BOT_TOKEN = "8284065959:AAEB1_8uVcXpMZCCQEfM8g2ZjKrDOh4ytY4"  # <-- YOUR TOKEN
+BOT_TOKEN = "8284065959:AAEB1_8uVcXpMZCCQEfM8g2ZjKrDOh4ytY4"  # <-- YOUR TOKEN (you provided)
 TC_PY = "tc.py"
 STATE_FILE = "quiz_state.json"
-BLOCK_INTERVAL_MIN = 12         # har bir blok orasidagi interval (12 daqiqa)
+BLOCK_INTERVAL_MIN = 12         # default interval in minutes (used outside 08:00-16:00)
 QUESTIONS_PER_BLOCK = 5         # blokdagi savol soni
 RELOAD_CHECK_SECONDS = 3        # tc.py ni tekshirish intervalli
 # ----------------------------------
@@ -39,8 +39,18 @@ TC_PATH = DATA_DIR / TC_PY
 
 # ---------- persistent state ----------
 # structure per chat_id:
-# { "asked":[norm_keys...], "current": original_key or None, "current_mode": "block"|"single"|None,
-#   "in_block": bool, "remaining": int, "next_time": iso or None, "score": int, "auto": bool }
+# {
+#   "unasked": [norm_key, ...],   # CHANGED: list of normalized keys not yet asked (balanced)
+#   "asked": [norm_key,...],      # optional archive
+#   "current": original_key or None,
+#   "current_mode": "block"|"single"|None,
+#   "in_block": bool,
+#   "remaining": int,
+#   "next_time": iso or None,
+#   "score": int,
+#   "auto": bool,
+#   "menu_stack": [callback_id,...]  # CHANGED: for navigation
+# }
 def load_state() -> Dict:
     if STATE_PATH.exists():
         try:
@@ -101,22 +111,9 @@ def normalize_for_compare(s: str) -> str:
     s = s.strip("`\"' ")
     return s
 
-# ---------- question selection (no side-effects) ----------
-def pick_random_question(chat_id: str) -> Tuple[str, str, str]:
-    """
-    Pick a random (chapter, key, desc) and mark as asked for this chat to avoid repeats.
-    This function DOES NOT set next_time. Caller controls scheduling.
-    """
-    global state
-    ltc_local = load_ltc_from_py()
-    FLAT = flatten_ltc(ltc_local)
-
-    if not FLAT:
-        raise RuntimeError("Savollar topilmadi — tc.py ni to'ldiring.")
-
-    # --- SAFE INITIALIZATION FOR RAILWAY / LOCAL ---
+# ---------- helper: ensure per-chat state init (CHANGED) ----------
+def ensure_chat_state_initialized(chat_id: str, flat_questions):
     st = state.setdefault(chat_id, {})
-
     st.setdefault("asked", [])
     st.setdefault("current", None)
     st.setdefault("current_mode", None)
@@ -125,46 +122,103 @@ def pick_random_question(chat_id: str) -> Tuple[str, str, str]:
     st.setdefault("next_time", None)
     st.setdefault("score", 0)
     st.setdefault("auto", False)
+    st.setdefault("menu_stack", [])
+    # unasked: if not present, fill with normalized keys of flat_questions (shuffled)
+    if "unasked" not in st or not isinstance(st["unasked"], list):
+        keys = []
+        for ch, k, v in flat_questions:
+            nk = normalize_for_compare(k)
+            if nk:
+                keys.append(nk)
+        # unique and shuffle
+        keys = list(dict.fromkeys(keys))  # preserve order unique
+        random.shuffle(keys)
+        st["unasked"] = keys
+    return st
 
-    # --- SELECT QUESTION WITHOUT REPEATS ---
-    asked = set(st["asked"])
+# ---------- balanced question selection (CHANGED) ----------
+def pick_random_question(chat_id: str) -> Tuple[str, str, str]:
+    """
+    Pick a random (chapter, key, desc) using per-chat 'unasked' list so that every question is asked
+    once before repeats. Returns original (chapter, key, desc).
+    """
+    global state
+    ltc_local = load_ltc_from_py()
+    FLAT = flatten_ltc(ltc_local)
 
-    # Filter only questions not asked yet
-    choices = [
-        item for item in FLAT
-        if normalize_for_compare(item[1]) not in asked
-        and normalize_for_compare(item[1]) != ""
-    ]
+    if not FLAT:
+        raise RuntimeError("Savollar topilmadi — tc.py ni to'ldiring.")
 
-    # If nothing left → reset asked list
-    if not choices:
-        st["asked"] = []
-        asked = set()
-        choices = FLAT.copy()
+    # Ensure chat state including unasked list
+    st = ensure_chat_state_initialized(chat_id, FLAT)
 
-    chapter, key, desc = random.choice(choices)
+    # if unasked empty -> refill from FLAT (re-create keys shuffled)
+    if not st.get("unasked"):
+        keys = []
+        for ch, k, v in FLAT:
+            nk = normalize_for_compare(k)
+            if nk:
+                keys.append(nk)
+        keys = list(dict.fromkeys(keys))
+        random.shuffle(keys)
+        st["unasked"] = keys
 
-    # Record as asked
-    st["asked"].append(normalize_for_compare(key))
+    # choose from unasked uniformly at random
+    chosen_norm = random.choice(st["unasked"])
 
+    # find first matching item in FLAT (preserve original chapter,key,desc)
+    chosen_item = None
+    for ch, k, v in FLAT:
+        if normalize_for_compare(k) == chosen_norm:
+            chosen_item = (ch, k, v)
+            break
+
+    if not chosen_item:
+        # fallback: repopulate and pick any
+        st["unasked"] = []
+        save_state(state)
+        return pick_random_question(chat_id)
+
+    # remove chosen_norm from unasked, record asked
+    try:
+        st["unasked"].remove(chosen_norm)
+    except ValueError:
+        pass
+    st.setdefault("asked", []).append(chosen_norm)
     save_state(state)
 
-    return chapter, key, desc
+    return chosen_item
 
+# ---------- helper: compute next_time based on hour (CHANGED) ----------
+def compute_next_time(after_dt: Optional[datetime] = None) -> datetime:
+    """
+    Decide the interval depending on current hour:
+    - between 08:00 (inclusive) and 16:00 (exclusive): less frequent (30 min)
+    - otherwise: BLOCK_INTERVAL_MIN (default 12 minutes)
+    """
+    now = after_dt or datetime.now()
+    hour = now.hour
+    if 8 <= hour < 16:
+        minutes = 30  # as requested: 8-16 kamroq, approx soatiga 2 marta (30 min)
+    else:
+        minutes = BLOCK_INTERVAL_MIN
+    return now + timedelta(minutes=minutes)
 
-# ---------- send functions ----------
+# ---------- send functions (keyboard handling improved) ----------
 async def send_single_question(chat_id: str):
     """Ad-hoc single question (for /quiz) — sets current_mode='single'"""
     try:
         chapter, key, desc = pick_random_question(str(chat_id))
     except RuntimeError:
-        await bot.send_message(chat_id, "Savollar mavjud emas. tc.py faylini to‘ldiring.", reply_markup=main_kb)
+        # show menu for empty database
+        await bot.send_message(chat_id, "Savollar mavjud emas. tc.py faylini to‘ldiring.", reply_markup=main_menu_markup())
         return
     st = state.setdefault(str(chat_id), {})
     st["current"] = key
     st["current_mode"] = "single"
     save_state(state)
-    await bot.send_message(chat_id, f"📘 <b>{chapter}</b>\n\nSavol:\n{desc}\n\nJavob yozing.", parse_mode="HTML", reply_markup=main_kb)
+    # CHANGED: Do not override user's reply keyboard here — keep main_kb visible
+    await bot.send_message(chat_id, f"📘 <b>{chapter}</b>\n\nSavol:\n{desc}\n\nJavob yozing.", parse_mode="HTML")
 
 async def start_block_for_user(chat_id: str):
     """Initialize a block for user: set in_block and remaining and send first question."""
@@ -172,6 +226,8 @@ async def start_block_for_user(chat_id: str):
     st["in_block"] = True
     st["remaining"] = QUESTIONS_PER_BLOCK
     st["current_mode"] = "block"
+    # While in block, we generally clear next_time to avoid scheduler starting another block concurrently
+    st["next_time"] = None
     save_state(state)
     await send_next_in_block(chat_id)
 
@@ -187,7 +243,7 @@ async def send_next_in_block(chat_id: str):
     try:
         chapter, key, desc = pick_random_question(str(chat_id))
     except RuntimeError:
-        await bot.send_message(chat_id, "Savollar topilmadi (block).", reply_markup=main_kb)
+        await bot.send_message(chat_id, "Savollar topilmadi (block).", reply_markup=main_menu_markup())
         st["in_block"] = False
         st["remaining"] = 0
         save_state(state)
@@ -195,19 +251,25 @@ async def send_next_in_block(chat_id: str):
     st["current"] = key
     st["current_mode"] = "block"
     save_state(state)
-    await bot.send_message(chat_id, f"📘 <b>{chapter}</b>\n\nSavol:\n{desc}\n\nJavob yozing.", parse_mode="HTML", reply_markup=main_kb)
+    # CHANGED: keep reply keyboard persistent by NOT passing reply_markup here
+    # If you prefer an inline "Stop" button during block, you can add InlineKeyboard here.
+    inline_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔚 Stop block", callback_data="menu_stop")]
+    ])
+    await bot.send_message(chat_id, f"📘 <b>{chapter}</b>\n\nSavol:\n{desc}\n\nJavob yozing.", parse_mode="HTML", reply_markup=inline_kb)
 
 async def finish_block(chat_id: str):
-    """Called when a block finishes: clear in_block and schedule next block."""
+    """Called when a block finishes: clear in_block and schedule next block based on time rules."""
     st = state.setdefault(str(chat_id), {})
     st["in_block"] = False
     st["remaining"] = 0
     st["current"] = None
     st["current_mode"] = None
-    # schedule next block after interval
-    st["next_time"] = (datetime.now() + timedelta(minutes=BLOCK_INTERVAL_MIN)).isoformat()
+    # schedule next block after computed interval
+    next_dt = compute_next_time(datetime.now())
+    st["next_time"] = next_dt.isoformat()
     save_state(state)
-    await bot.send_message(chat_id, f"✅ Blok yakunlandi. Keyingi blok {BLOCK_INTERVAL_MIN} daqiqadan so‘ng ko‘rinadi.", reply_markup=main_kb)
+    await bot.send_message(chat_id, f"✅ Blok yakunlandi. Keyingi blok { (next_dt - datetime.now()).seconds // 60 } daqiqadan so‘ng ko‘rinadi.", reply_markup=main_menu_markup())
 
 # ---------- answer checking ----------
 from difflib import SequenceMatcher
@@ -225,6 +287,7 @@ def evaluate_answer(user_text: str, correct_key: str):
     return False, f"❌ Noto‘g‘ri. Toʻgʻri buyruq: <code>{correct_key}</code>"
 
 # ---------- keyboards ----------
+# main reply keyboard (keeps present)
 main_kb = ReplyKeyboardMarkup(
     keyboard=[[KeyboardButton(text="/start"), KeyboardButton(text="/help")]],
     resize_keyboard=True
@@ -246,13 +309,14 @@ async def cmd_start_help(msg: types.Message):
         "👋 Assalomu alaykum! Men Linux buyruqlari quiz-botman.\n\n"
         "/quiz — bitta savol oladi\n"
         "/quiz3 — ketma-ket 3 savol oladi (har biriga javobni kutadi)\n"
-        "/subscribe — avtomatik bloklarni (har 12 daqiqa) yoqish\n"
+        "/subscribe — avtomatik bloklarni (soatga mos) yoqish\n"
         "/unsubscribe — avtomatik bloklarni o‘chirish\n"
         "/reload — tc.py qayta yuklash\n"
         "/info <buyruq> — buyruq izohi\n"
         "/view <chapter> — bo‘limni ko‘rish\n\n"
         "Har blok: 5 savol. Bot har savolga javobingizni kutadi, keyin keyingisiga o‘tadi."
     )
+    # Show both reply keyboard and menu inline buttons
     await msg.answer(help_text, reply_markup=main_kb)
     await msg.answer("Menu:", reply_markup=main_menu_markup())
 
@@ -262,17 +326,15 @@ async def cmd_quiz(msg: types.Message):
 
 @dp.message(F.text == "/quiz3")
 async def cmd_quiz3(msg: types.Message):
-    # implement as a temporary short block of 3 questions (user-driven)
     uid = str(msg.chat.id)
     st = state.setdefault(uid, {})
-    # if already in block, inform
     if st.get("in_block"):
         await msg.answer("Siz hozir blok ichidasiz — avvalgi blokni tugating yoki /stop qiling.", reply_markup=main_kb)
         return
-    # create a temp block
     st["in_block"] = True
     st["remaining"] = 3
     st["current_mode"] = "block"
+    st["next_time"] = None
     save_state(state)
     await send_next_in_block(uid)
 
@@ -284,7 +346,7 @@ async def cmd_subscribe(msg: types.Message):
     # schedule first block soon (immediately)
     st["next_time"] = datetime.now().isoformat()
     save_state(state)
-    await msg.answer("✅ Avtomatik bloklar yoqildi. Har 12 daqiqada bloklar keladi (har blok 5 savol).", reply_markup=main_kb)
+    await msg.answer("✅ Avtomatik bloklar yoqildi. Vaqt qoidalariga ko‘ra bloklar keladi.", reply_markup=main_kb)
 
 @dp.message(F.text == "/unsubscribe")
 async def cmd_unsubscribe(msg: types.Message):
@@ -306,7 +368,12 @@ async def cmd_view(msg: types.Message):
         if not chapters:
             await msg.answer("Hozircha bo'limlar mavjud emas.", reply_markup=main_kb)
             return
-        await msg.answer("Mavjud bo'limlar:\n" + "\n".join(chapters), reply_markup=main_kb)
+        # show chapters as inline keyboard with Back to menu
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            *[[InlineKeyboardButton(text=ch, callback_data=f"view::{ch}") ] for ch in chapters],
+            [InlineKeyboardButton(text="⬅️ Orqaga", callback_data="back_to_menu")]
+        ])
+        await msg.answer("Mavjud bo'limlar:", reply_markup=kb)
         return
     chapter = parts[1].strip()
     ltc_local = load_ltc_from_py()
@@ -317,7 +384,11 @@ async def cmd_view(msg: types.Message):
     for k, v in ltc_local[chapter].items():
         lines.append(f"{k} ➤ {v}")
     text = "\n".join(lines)
-    await msg.answer(f"📘 <b>{chapter}</b>\n\n{text}", parse_mode="HTML", reply_markup=main_kb)
+    # add back-to-chapters button
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⬅️ Orqaga", callback_data="back_to_chapters")],
+    ])
+    await msg.answer(f"📘 <b>{chapter}</b>\n\n{text}", parse_mode="HTML", reply_markup=kb)
 
 # -------------------------
 # /info handler (info about a specific command)
@@ -347,16 +418,21 @@ async def cmd_info(msg: types.Message):
         await msg.answer("Buyruq topilmadi. Iltimos toʻliq yoki aniqroq kiriting.", reply_markup=main_kb)
 
 # -------------------------
-# Inline callback handler
+# Inline callback handler (menu navigation + actions)
 # -------------------------
 @dp.callback_query(F.data)
 async def cb_menu(cq: types.CallbackQuery):
     data = cq.data
-    uid = cq.message.chat.id
+    uid = str(cq.message.chat.id)
 
     # --- QUIZ BOSHLASH ---
     if data == "menu_quiz":
-        await cq.message.answer("Quiz boshlanmoqda...", reply_markup=main_kb)
+        # push to menu_stack: remember where we came from (menu)
+        st = state.setdefault(uid, {})
+        st.setdefault("menu_stack", [])
+        st["menu_stack"].append("menu")  # CHANGED: simple stack marker
+        save_state(state)
+        await cq.message.answer("Quiz boshlanmoqda...")
         await send_single_question(uid)
 
     # --- BO‘LIMLARNI KO‘RISH (MENU_VIEW) ---
@@ -368,17 +444,19 @@ async def cb_menu(cq: types.CallbackQuery):
             await cq.answer()
             return
 
-        # Aiogram 3.x uchun to‘g‘ri InlineKeyboardMarkup
+        # InlineKeyboardMarkup with back button
         kb = InlineKeyboardMarkup(
             inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text=ch,
-                        callback_data=f"view::{ch}"
-                    )
-                ] for ch in chapters
+                *[[InlineKeyboardButton(text=ch, callback_data=f"view::{ch}") ] for ch in chapters],
+                [InlineKeyboardButton(text="⬅️ Orqaga", callback_data="back_to_menu")]
             ]
         )
+
+        # push to menu stack
+        st = state.setdefault(uid, {})
+        st.setdefault("menu_stack", [])
+        st["menu_stack"].append("menu_view")
+        save_state(state)
 
         await cq.message.answer("Bo‘limni tanlang:", reply_markup=kb)
 
@@ -389,7 +467,16 @@ async def cb_menu(cq: types.CallbackQuery):
 
         if ch in ltc_local:
             text = "\n".join(f"{k} ➤ {v}" for k, v in ltc_local[ch].items())
-            await cq.message.answer(f"📘 {ch}\n\n{text}", reply_markup=main_kb)
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="⬅️ Orqaga", callback_data="back_to_chapters")]
+            ])
+            # push to stack
+            st = state.setdefault(uid, {})
+            st.setdefault("menu_stack", [])
+            st["menu_stack"].append(f"view::{ch}")
+            save_state(state)
+
+            await cq.message.answer(f"📘 {ch}\n\n{text}", reply_markup=kb)
         else:
             await cq.message.answer("Bunday bo‘lim topilmadi.", reply_markup=main_kb)
 
@@ -406,10 +493,10 @@ async def cb_menu(cq: types.CallbackQuery):
 
     # --- QUIZNI TO‘XTATISH ---
     elif data == "menu_stop":
-        st = state.setdefault(str(uid), {
+        st = state.setdefault(uid, {
             "asked": [], "current": None, "current_mode": None,
             "in_block": False, "remaining": 0, "next_time": None,
-            "score": 0, "auto": False
+            "score": 0, "auto": False, "menu_stack": []
         })
 
         st["in_block"] = False
@@ -420,7 +507,33 @@ async def cb_menu(cq: types.CallbackQuery):
 
         await cq.message.answer("Quiz to‘xtatildi.", reply_markup=main_kb)
 
-    # --- JAVOB QAYTARISH ---
+    # --- NAVIGATION: back to menu / chapters (CHANGED) ---
+    elif data == "back_to_menu":
+        # Clear stack and show main menu
+        st = state.setdefault(uid, {})
+        st["menu_stack"] = []
+        save_state(state)
+        await cq.message.answer("Menu:", reply_markup=main_menu_markup())
+
+    elif data == "back_to_chapters":
+        # pop last (should be view::<ch>) and show chapters list again
+        st = state.setdefault(uid, {})
+        # remove last element if present and show chapters list
+        if st.get("menu_stack"):
+            st["menu_stack"].pop()
+        chapters = list(load_ltc_from_py().keys())
+        if not chapters:
+            await cq.message.answer("Hozircha bo'limlar mavjud emas.", reply_markup=main_kb)
+            await cq.answer()
+            return
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            *[[InlineKeyboardButton(text=ch, callback_data=f"view::{ch}") ] for ch in chapters],
+            [InlineKeyboardButton(text="⬅️ Orqaga", callback_data="back_to_menu")]
+        ])
+        save_state(state)
+        await cq.message.answer("Bo‘limni tanlang:", reply_markup=kb)
+
+    # ensure we answer callback to remove loading state in client
     await cq.answer()
 
 # -------------------------
@@ -434,8 +547,8 @@ async def generic_handler(msg: types.Message):
     cur = st.get("current")
     if cur:
         is_ok, feedback = evaluate_answer(text, cur)
-        # reply (feedback may contain HTML tags)
-        await msg.answer(feedback, parse_mode="HTML", reply_markup=main_kb)
+        # CHANGED: do not override main keyboard when sending feedback; send feedback plainly
+        await msg.answer(feedback, parse_mode="HTML")
         if is_ok:
             st["score"] = st.get("score", 0) + 1
         # After answering: behavior depends on mode
