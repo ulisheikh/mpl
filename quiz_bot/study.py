@@ -235,15 +235,17 @@ def pick_random_question(chat_id: str) -> Tuple[str, str, str]:
 
     return chosen_item
 
-# ---------- helper: compute next_time based on hour (CHANGED) ----------
+# ---------- CONFIG ----------
+BLOCK_INTERVAL_MIN = 12   # har safar 12 daqiqa
+
+# ---------- helper: compute next_time ----------
 def compute_next_time(after_dt: Optional[datetime] = None) -> datetime:
     """
-    FIXED: Barcha vaqt uchun BLOCK_INTERVAL_MIN (12 minut) ishlatadi.
-    Endi soat farqi yo'q!
+    FAQAT 12 DAQIQA interval.
+    Hech qanday soatga qarab o'zgarish YŌ‘Q.
     """
     now = after_dt or datetime.now()
-    minutes = BLOCK_INTERVAL_MIN  # Har doim 12 minut
-    return now + timedelta(minutes=minutes)
+    return now + timedelta(minutes=BLOCK_INTERVAL_MIN)
 
 # ---------- STOP inline keyboard (for continuous mode) ----------
 stop_quiz_kb = InlineKeyboardMarkup(inline_keyboard=[
