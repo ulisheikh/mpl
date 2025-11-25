@@ -235,20 +235,17 @@ def pick_random_question(chat_id: str) -> Tuple[str, str, str]:
 
     return chosen_item
 
-# ---------- helper: compute next_time based on hour (CHANGED) ----------
+# ---------- CONFIG ----------
+BLOCK_INTERVAL_MIN = 12   # har safar 12 daqiqa
+
+# ---------- helper: compute next_time ----------
 def compute_next_time(after_dt: Optional[datetime] = None) -> datetime:
     """
-    Decide the interval depending on current hour:
-    - between 08:00 (inclusive) and 16:00 (exclusive): less frequent (30 min)
-    - otherwise: BLOCK_INTERVAL_MIN (default 12 minutes)
+    FAQAT 12 DAQIQA interval.
+    Hech qanday soatga qarab o'zgarish YŌ‘Q.
     """
     now = after_dt or datetime.now()
-    hour = now.hour
-    if 8 <= hour < 16:
-        minutes = 30  # as requested: 8-16 kamroq, approx soatiga 2 marta (30 min)
-    else:
-        minutes = BLOCK_INTERVAL_MIN
-    return now + timedelta(minutes=minutes)
+    return now + timedelta(minutes=BLOCK_INTERVAL_MIN)
 
 # ---------- STOP inline keyboard (for continuous mode) ----------
 stop_quiz_kb = InlineKeyboardMarkup(inline_keyboard=[
