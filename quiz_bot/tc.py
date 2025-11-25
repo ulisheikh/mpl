@@ -17,7 +17,7 @@ ltc = {
         "grep": "Berilgan so‘zni yoki naqshni matndan qidiradi. ",
         "ps": "Ayni vaqtda tizimda ishlayotgan jarayonlarni (process) ko‘rsatadi.",
         "echo": "Terminalga matn yoki o‘zgaruvchini chiqaradi. Faylga yozishda ham ishlatiladi.",
-        "cat": "Fayl ichidagi matnni o'qiydi yoki bir nechta fayllarni birlashtiradi.",
+        "cat": "Fayl ichidagi matnni o'qiydi yo'q bo'lsa yaratadi",
         "cat > ": "Faylga yozadi (mavjud faylni tozalaydi). Saqlash uchun Ctrl+D bosing.",
         "cat >> ": "Faylga yangi satrlar qo‘shadi (mavjud ma’lumot o‘chmaydi).",
         "touch": "Bo‘sh fayl yaratadi yoki mavjud faylning so‘nggi o‘zgartirish vaqtini yangilaydi.",
