@@ -22,6 +22,21 @@ def echo_all(message):
 
     bot.reply_to(message, javob(msg))
 
+def save_user(chat_id):
+    # agar fayl yo'q bo'lsa — yaratadi
+    with open("users.txt", "a") as f:
+        f.write(str(chat_id) + "\n")
+
+
+@bot.message_handler(commands=['start'])
+def start(message):
+    chat_id = message.chat.id
+    save_user(chat_id)
+
+    bot.send_message(chat_id, "Salom, xush kelibsiz!")
+
+
+
 
 bot.polling()
 
