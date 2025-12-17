@@ -1,0 +1,151 @@
+{
+  "5830567800": {
+    "lang": "uz",
+    "username": "@ulugbek_mahmudov",
+    "history": [
+      {
+        "action": "add",
+        "word": "나이",
+        "time": "2025-12-17 11:06:38"
+      },
+      {
+        "action": "add",
+        "word": "운동",
+        "time": "2025-12-17 11:06:42"
+      },
+      {
+        "action": "add",
+        "word": "대학생",
+        "time": "2025-12-17 11:06:48"
+      },
+      {
+        "action": "edit",
+        "word": "대학생",
+        "time": "2025-12-17 11:07:35"
+      },
+      {
+        "action": "add",
+        "word": "안녕",
+        "time": "2025-12-17 11:29:20"
+      },
+      {
+        "action": "delete",
+        "word": "안녕",
+        "time": "2025-12-17 11:42:15"
+      },
+      {
+        "action": "add",
+        "word": "의사",
+        "time": "2025-12-17 11:47:27"
+      },
+      {
+        "action": "add",
+        "word": "핸드폰",
+        "time": "2025-12-17 11:47:45"
+      },
+      {
+        "action": "add",
+        "word": "바이러스",
+        "time": "2025-12-17 11:47:55"
+      },
+      {
+        "action": "add",
+        "word": "의사 (UZ)",
+        "time": "2025-12-17 11:57:27"
+      }
+    ],
+    "tr_lang": "uz",
+    "dictionaries": {
+      "uz": [
+        {
+          "ko": "사과",
+          "uz": [
+            "uzr so'rayman"
+          ]
+        },
+        {
+          "ko": "사랑",
+          "uz": [
+            "친"
+          ]
+        },
+        {
+          "ko": "얼른",
+          "uz": [
+            "Shoshilmoq"
+          ]
+        },
+        {
+          "ko": "얼룩",
+          "uz": [
+            "dog'"
+          ]
+        },
+        {
+          "ko": "암",
+          "uz": [
+            "saraton"
+          ]
+        },
+        {
+          "ko": "얼마",
+          "uz": [
+            "narxi qancha"
+          ]
+        },
+        {
+          "ko": "나이",
+          "uz": [
+            "yosh"
+          ]
+        },
+        {
+          "ko": "운동",
+          "uz": [
+            "ishlab chiqish; mashqa qilish",
+            "Motor qiyinchiliklari - qurilmalarni almashtirish"
+          ]
+        },
+        {
+          "ko": "대학생",
+          "uz": [
+            "talaba"
+          ]
+        },
+        {
+          "ko": "의사",
+          "uz": [
+            "shifokor",
+            "Qabulga yozilish uchun so'rov",
+            "Faqat tanlanganni koʻrsatish"
+          ]
+        }
+      ],
+      "vi": [
+        {
+          "ko": "의사",
+          "uz": [
+            "thầy thuốc",
+            "Bác sĩ",
+            "- Tiếng Anh giao tiếp tốt."
+          ]
+        },
+        {
+          "ko": "핸드폰",
+          "uz": [
+            "Di động",
+            "Để kiếm tiền, chỉ cần nhấp vào số điện thoại di động của bạn tại đây.",
+            "Nguồn tắt với đèn báo nguồn yếu trên màn hình điện thoại."
+          ]
+        },
+        {
+          "ko": "바이러스",
+          "uz": [
+            "Virus",
+            "Phần mềm diệt virus"
+          ]
+        }
+      ]
+    }
+  }
+}
