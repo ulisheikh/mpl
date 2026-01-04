@@ -2,6 +2,10 @@ import telebot
 import json
 import os
 import re
+import subprocess
+import psutil
+import threading
+import time
 from datetime import datetime
 
 # --- KONFIGURATSIYA ---
@@ -10,6 +14,7 @@ DATA_FILE = "dictionary.json"
 
 bot = telebot.TeleBot(TOKEN)
 user_context = {}
+ADMIN_ID = 8046330769 # O'z ID raqamingizni kiriting
 
 # --- MA'LUMOTLAR BILAN ISHLASH ---
 def load_data():
@@ -17,8 +22,7 @@ def load_data():
         try:
             with open(DATA_FILE, 'r', encoding='utf-8') as f:
                 return json.load(f)
-        except:
-            return {}
+        except: return {}
     return {}
 
 def save_data(data):
@@ -26,8 +30,13 @@ def save_data(data):
         json.dump(data, f, ensure_ascii=False, indent=4)
 
 def is_korean(text):
-    # Koreys alifbosini tekshirish
     return bool(re.search('[\uac00-\ud7af]', text))
+
+def get_battery():
+    try:
+        out = subprocess.check_output(["termux-battery-status"], timeout=5).decode()
+        return json.loads(out)
+    except: return None
 
 # --- TUGMALAR ---
 def get_main_keyboard():
@@ -36,23 +45,18 @@ def get_main_keyboard():
     markup.row("📂 BO‘LIMLAR", "📤 EXPORT")
     return markup
 
-# --- INFO MATNI ---
 def get_help_text():
     return (
-        "📘 **DICTIONARYBOT — TO‘LIQ TAVSIF**\n\n"
-        "1️⃣ **Bo'lim tanlash:**\n"
-        "   `>35` — 35-topikni tanlash/yaratish\n"
-        "   `.1` — Tanlangan topikda 1-savolni ochish\n\n"
-        "2️⃣ **So'z qo'shish:**\n"
-        "   `학교 maktab` yoki `maktab 학교` deb yozing.\n"
-        "   *Faqat bitta tildagi so'zlar bo'lsa xatolik beradi.*\n\n"
-        "3️⃣ **Tahrirlash (Ikki tomonlama):**\n"
-        "   🔹 `사과.olma` -> Tarjimani tahrirlash\n"
-        "   🔹 `olma.배` -> Koreyscha so'zni tahrirlash\n\n"
-        "4️⃣ **Qidiruv:** `s.olma` yoki `s.사과`"
+        "📘 **DICTIONARYBOT — YO'RIQNOMA**\n\n"
+        "1️⃣ **Bo'lim:** `>35` va `.1` (Topik va Savol)\n"
+        "2️⃣ **Qo'shish:** `학교 maktab` (Ikki xil til)\n"
+        "3️⃣ **Tahrir:** `사과.olma` yoki `olma.배` (Nuqta orqali)\n"
+        "4️⃣ **Qidiruv:** `s.olma` \n"
+        "📊 **Status:** /status buyrug'ini bosing."
     )
 
-# --- HANDLERLAR ---
+# --- HANDLERLAR TARTIBI MUHIM ---
+
 @bot.message_handler(commands=['start'])
 def welcome_cmd(message):
     bot.send_message(message.chat.id, get_help_text(), parse_mode="Markdown", reply_markup=get_main_keyboard())
@@ -61,55 +65,64 @@ def welcome_cmd(message):
 def welcome_btn(message):
     bot.send_message(message.chat.id, get_help_text(), parse_mode="Markdown", reply_markup=get_main_keyboard())
 
+# BUYRUQLAR handle_all DAN TEPADA BO'LISHI KERAK
+@bot.message_handler(commands=['status'])
+def status_cmd(message):
+    bat = get_battery()
+    ram = psutil.virtual_memory()
+    msg = "📊 **TIZIM HOLATI**\n\n"
+    if bat:
+        msg += (f"🔋 Batareya: {bat.get('percentage') or 0}%\n"
+                f"🌡 Harorat: {bat.get('temperature') or 0}°C\n"
+                f"⚡ Holat: {bat.get('status') or 'Noma`lum'}\n")
+    else:
+        msg += "🔋 Batareya: Termux API ma'lumoti yo'q\n"
+    msg += f"🧠 RAM: {ram.percent}%"
+    bot.send_message(message.chat.id, msg, parse_mode="Markdown")
+
 @bot.message_handler(func=lambda m: m.text == "📤 EXPORT")
 def export_file(message):
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, 'rb') as f:
-            bot.send_document(message.chat.id, f, caption=f"Lug'at fayli\nSana: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-    else:
-        bot.send_message(message.chat.id, "Lug'at hali bo'sh.")
+            bot.send_document(message.chat.id, f, caption="Zaxira nusxa")
+    else: bot.send_message(message.chat.id, "Lug'at bo'sh.")
 
 @bot.message_handler(func=lambda m: m.text == "📂 BO‘LIMLAR")
 def show_sections(message):
     data = load_data()
-    if not data:
-        return bot.send_message(message.chat.id, "Lug'at bo'sh.")
-
+    if not data: return bot.send_message(message.chat.id, "Lug'at bo'sh.")
     report = "📂 **Mavjud bo'limlar:**\n\n"
-    for topic, questions in data.items():
-        report += f"📌 **{topic}**\n"
-        for q in questions.keys():
-            t_nums = re.findall(r'\d+', topic)
+    for t, qs in data.items():
+        report += f"📌 **{t}**\n"
+        for q in qs.keys():
+            t_nums = re.findall(r'\d+', t)
             q_nums = re.findall(r'\d+', q)
             if t_nums and q_nums:
                 report += f"  ┕ 🔹 {q} (/view_{t_nums[0]}_{q_nums[0]})\n"
-
-    report += "\n👆 So'zlarni ko'rish uchun ko'k buyruqni bosing."
     bot.send_message(message.chat.id, report)
 
 @bot.message_handler(func=lambda m: m.text.startswith("/view_"))
 def view_words(message):
     data = load_data()
     try:
-        parts = message.text.split("_")
-        t_key, q_key = f"{parts[1]}-topik", f"{parts[2]}-savol"
-        if t_key in data and q_key in data[t_key]:
-            words = data[t_key][q_key]
-            res = f"📖 **{t_key}, {q_key} so'zlari:**\n\n" + "\n".join([f"▫️ `{k}` — {v}" for k, v in words.items()])
-            bot.send_message(message.chat.id, res, parse_mode="Markdown")
-        else:
-            bot.send_message(message.chat.id, "Bo'lim topilmadi.")
-    except:
-        bot.send_message(message.chat.id, "Xato yuz berdi.")
+        p = message.text.split("_")
+        t_key, q_key = f"{p[1]}-topik", f"{p[2]}-savol"
+        words = data[t_key][q_key]
+        res = f"📖 **{t_key}, {q_key}:**\n\n" + "\n".join([f"▫️ `{k}` — {v}" for k, v in words.items()])
+        bot.send_message(message.chat.id, res, parse_mode="Markdown")
+    except: bot.send_message(message.chat.id, "Xatolik: bo'lim topilmadi.")
 
 @bot.message_handler(content_types=['text'])
 def handle_all(message):
     text = message.text.strip()
+    # AGAR MATN BUYRUQ BO'LSA (/) UNI QABUL QILMA
+    if text.startswith("/"):
+        return
+
     uid = message.from_user.id
     data = load_data()
 
-    if text.lower() in ["start", "/start", "▶️ start"]: return
-
+    # Bo'limlarni tanlash logicasi (> va .)
     if text.startswith(">"):
         t_key = f"{text[1:].strip()}-topik"
         if t_key not in data: data[t_key] = {}
@@ -129,40 +142,36 @@ def handle_all(message):
         bot.send_message(message.chat.id, f"✅ Tanlandi: {t_key} | {q_key}")
         return
 
+    # Qidiruv s.
     if text.lower().startswith("s."):
         query = text[2:].strip().lower()
-        res = "🔍 Natijalar:\n"
-        found = False
+        res = "🔍 Natijalar:\n"; found = False
         for t, qs in data.items():
             for q, ws in qs.items():
                 for kr, uz in ws.items():
                     if query in kr.lower() or query in uz.lower():
-                        res += f"\n📍 {t}, {q}:\n{kr} - {uz}\n"
-                        found = True
+                        res += f"\n📍 {t}, {q}:\n{kr} - {uz}\n"; found = True
         bot.send_message(message.chat.id, res if found else "❌ Topilmadi.")
         return
 
+    # Tahrirlash x.y (Ikki tomonlama)
     if "." in text and not text.startswith("."):
-        old_word, new_word = [i.strip() for i in text.split(".", 1)]
+        old_w, new_w = [i.strip() for i in text.split(".", 1)]
         found = False
         for t in data:
             for q in data[t]:
-                if old_word in data[t][q]:
-                    data[t][q][old_word] = new_word
-                    found = True
+                if old_w in data[t][q]:
+                    data[t][q][old_w] = new_w; found = True
                 else:
                     for kr, uz in list(data[t][q].items()):
-                        if uz == old_word:
-                            data[t][q].pop(kr)
-                            data[t][q][new_word] = uz
-                            found = True
+                        if uz == old_w:
+                            data[t][q].pop(kr); data[t][q][new_w] = uz; found = True
         if found:
-            save_data(data)
-            bot.send_message(message.chat.id, "✅ Tahrirlandi.")
-        else:
-            bot.send_message(message.chat.id, "❌ Topilmadi.")
+            save_data(data); bot.send_message(message.chat.id, "✅ Tahrirlandi.")
+        else: bot.send_message(message.chat.id, "❌ Topilmadi.")
         return
 
+    # So'z qo'shish (Agar bo'lim tanlangan bo'lsa)
     if uid in user_context and user_context[uid].get("topic") and user_context[uid].get("question"):
         lines = text.split("\n")
         t_key, q_key = user_context[uid]["topic"], user_context[uid]["question"]
@@ -171,78 +180,39 @@ def handle_all(message):
             parts = line.split()
             if len(parts) < 2: continue
             w1, w2 = parts[0], " ".join(parts[1:])
-            if is_korean(w1) == is_korean(w2):
-                bot.send_message(message.chat.id, f"❌ Xato: faqat bitta til (`{line}`)")
-                continue
+            if is_korean(w1) == is_korean(w2): continue
             kr, uz = (w1, w2) if is_korean(w1) else (w2, w1)
-            data[t_key][q_key][kr] = uz
-            added += 1
+            data[t_key][q_key][kr] = uz; added += 1
         if added > 0:
-            save_data(data)
-            bot.send_message(message.chat.id, f"✅ {added} ta so'z saqlandi.")
+            save_data(data); bot.send_message(message.chat.id, f"✅ {added} ta so'z saqlandi.")
     else:
         bot.send_message(message.chat.id, "⚠️ Avval bo'lim tanlang (>35 va .1)")
 
-# ================== STATUS QISMI (QO‘SHILDI) ==================
-import subprocess
-import psutil
-import threading
-import time
-
-ADMIN_ID = message.from_user.id if False else 0  # faqat admin uchun
-
-def get_battery():
-    try:
-        out = subprocess.check_output(["termux-battery-status"]).decode()
-        return json.loads(out)
-    except:
-        return None
-
-@bot.message_handler(commands=['status'])
-def status_cmd(message):
-    bat = get_battery()
-    ram = psutil.virtual_memory()
-
-    if not bat:
-        return bot.send_message(message.chat.id, "❌ Battery info yo‘q")
-
-    bot.send_message(
-        message.chat.id,
-        f"📊 STATUS\n\n"
-        f"🔋 Batareya: {bat['percentage']}%\n"
-        f"🌡 Harorat: {bat['temperature']}°C\n"
-        f"⚡ Holat: {bat['status']}\n\n"
-        f"🧠 RAM: {ram.percent}%",
-    )
-
+# --- MONITORING ---
 def auto_status():
     while True:
-        bat = get_battery()
-        ram = psutil.virtual_memory()
-        if bat:
-            if bat["percentage"] <= 10:
-                bot.send_message(ADMIN_ID, "🔴 Batareya 10% qoldi")
-            if bat["percentage"] == 100:
-                bot.send_message(ADMIN_ID, "🟢 Batareya 100%")
-            if bat["temperature"] and bat["temperature"] >= 45:
-                bot.send_message(ADMIN_ID, f"🔥 Qizish: {bat['temperature']}°C")
-            if ram.percent >= 90:
-                bot.send_message(ADMIN_ID, f"🧠 RAM yuqori: {ram.percent}%")
-        time.sleep(60)
+        try:
+            bat = get_battery()
+            ram = psutil.virtual_memory()
+            if bat and ADMIN_ID:
+                if bat.get('percentage', 100) <= 10:
+                    bot.send_message(ADMIN_ID, "🔴 Batareya 10% qoldi!")
+            if ram.percent >= 90 and ADMIN_ID:
+                bot.send_message(ADMIN_ID, f"🧠 RAM to'ldi: {ram.percent}%")
+        except: pass
+        time.sleep(300)
 
 threading.Thread(target=auto_status, daemon=True).start()
-# ================== STATUS OXIRI ==================
 
 # --- RUN INFO ---
 if __name__ == "__main__":
     try:
         me = bot.get_me()
-        print("\n" + "="*50)
+        print("\n" + "="*40)
         print(f"BOT ISHGA TUSHDI: @{me.username}")
         print(f"ID: {me.id}")
-        print(f"VAQT: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"STATUS: Online va lug'at tayyor.")
-        print("="*50 + "\n")
+        print(f"SANA: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"STATUS: ONLINE")
+        print("="*40 + "\n")
         bot.infinity_polling()
-    except Exception as e:
-        print(f"Xatolik: {e}")
+    except Exception as e: print(f"Xato: {e}")
