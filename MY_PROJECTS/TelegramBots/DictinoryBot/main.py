@@ -142,16 +142,15 @@ def handle_all(message):
         bot.send_message(message.chat.id, res if found else "❌ Topilmadi.")
         return
 
-    # --- TAHRIRLASH (Ikki tomonlama) ---
     if "." in text and not text.startswith("."):
         old_word, new_word = [i.strip() for i in text.split(".", 1)]
         found = False
         for t in data:
             for q in data[t]:
-                if old_word in data[t][q]: # Kalit bo'lsa qiymatni o'zgartirish
+                if old_word in data[t][q]:
                     data[t][q][old_word] = new_word
                     found = True
-                else: # Qiymat bo'lsa kalitni o'zgartirish
+                else:
                     for kr, uz in list(data[t][q].items()):
                         if uz == old_word:
                             data[t][q].pop(kr)
@@ -164,7 +163,6 @@ def handle_all(message):
             bot.send_message(message.chat.id, "❌ Topilmadi.")
         return
 
-    # --- SO'Z QO'SHISH (Filtr bilan) ---
     if uid in user_context and user_context[uid].get("topic") and user_context[uid].get("question"):
         lines = text.split("\n")
         t_key, q_key = user_context[uid]["topic"], user_context[uid]["question"]
@@ -173,21 +171,67 @@ def handle_all(message):
             parts = line.split()
             if len(parts) < 2: continue
             w1, w2 = parts[0], " ".join(parts[1:])
-            
-            # Til filtri
             if is_korean(w1) == is_korean(w2):
-                bot.send_message(message.chat.id, f"❌ Xato: Siz faqat bir tildagi so'zlarni kiritdingiz! (`{line}`)")
+                bot.send_message(message.chat.id, f"❌ Xato: faqat bitta til (`{line}`)")
                 continue
-                
             kr, uz = (w1, w2) if is_korean(w1) else (w2, w1)
             data[t_key][q_key][kr] = uz
             added += 1
-
         if added > 0:
             save_data(data)
             bot.send_message(message.chat.id, f"✅ {added} ta so'z saqlandi.")
     else:
         bot.send_message(message.chat.id, "⚠️ Avval bo'lim tanlang (>35 va .1)")
+
+# ================== STATUS QISMI (QO‘SHILDI) ==================
+import subprocess
+import psutil
+import threading
+import time
+
+ADMIN_ID = message.from_user.id if False else 0  # faqat admin uchun
+
+def get_battery():
+    try:
+        out = subprocess.check_output(["termux-battery-status"]).decode()
+        return json.loads(out)
+    except:
+        return None
+
+@bot.message_handler(commands=['status'])
+def status_cmd(message):
+    bat = get_battery()
+    ram = psutil.virtual_memory()
+
+    if not bat:
+        return bot.send_message(message.chat.id, "❌ Battery info yo‘q")
+
+    bot.send_message(
+        message.chat.id,
+        f"📊 STATUS\n\n"
+        f"🔋 Batareya: {bat['percentage']}%\n"
+        f"🌡 Harorat: {bat['temperature']}°C\n"
+        f"⚡ Holat: {bat['status']}\n\n"
+        f"🧠 RAM: {ram.percent}%",
+    )
+
+def auto_status():
+    while True:
+        bat = get_battery()
+        ram = psutil.virtual_memory()
+        if bat:
+            if bat["percentage"] <= 10:
+                bot.send_message(ADMIN_ID, "🔴 Batareya 10% qoldi")
+            if bat["percentage"] == 100:
+                bot.send_message(ADMIN_ID, "🟢 Batareya 100%")
+            if bat["temperature"] and bat["temperature"] >= 45:
+                bot.send_message(ADMIN_ID, f"🔥 Qizish: {bat['temperature']}°C")
+            if ram.percent >= 90:
+                bot.send_message(ADMIN_ID, f"🧠 RAM yuqori: {ram.percent}%")
+        time.sleep(60)
+
+threading.Thread(target=auto_status, daemon=True).start()
+# ================== STATUS OXIRI ==================
 
 # --- RUN INFO ---
 if __name__ == "__main__":
