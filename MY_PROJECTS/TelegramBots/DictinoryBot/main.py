@@ -111,9 +111,9 @@ def get_main_keyboard():
 
 def get_help_text():
     return (
-        "╔══════════════════╗\n"
-        "║  📚 LUG'AT BOT   ║\n"
-        "╚══════════════════╝\n\n"
+        "╔═════════╗\n"
+        "║  📚 LUG'AT BOT    ║\n"
+        "╚═════════╝\n\n"
         
         "1️⃣ TOPIK TANLASH\n"
         "   >35 yoki >36 yoki >37\n"
@@ -167,9 +167,9 @@ def status_cmd(message):
     bat = get_battery()
     ram = psutil.virtual_memory()
     
-    msg = "╔════════════════════╗\n"
-    msg += "║ 📊 TIZIM HOLATI   ║\n"
-    msg += "╚═══════════════════╝\n\n"
+    msg = "╔═════════╗\n"
+    msg += "║ 📊 TIZIM HOLATI  ║\n"
+    msg += "╚═════════╝\n\n"
     msg += f"⏱ Ishlash vaqti: {get_uptime()}\n\n"
     
     if bat:
@@ -307,10 +307,10 @@ def show_section_words(message):
         words = questions[q_key]
         if words:
             q_num = q_key.replace("-savol so'zlari", "")
-            msg += f"                 {q_num}-savol so'zlari\n"
+            msg += f"{q_num}-savol so'zlari\n"
             
             for kr, uz in words.items():
-                msg += f"                 • {kr} → {uz}\n"
+                msg += f"   • {kr} → {uz}\n"
             msg += "\n"
     
     bot.send_message(message.chat.id, msg)
