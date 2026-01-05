@@ -4,11 +4,7 @@ print("\n📘 Linux Terminal komandalarining to‘liq lug‘ati yuklanmoqda...\n
 
 ltc = {
     "chapter-1": {
-<<<<<<< HEAD
         "pwd": "Joriy ishchi katalogni (working directory) ko‘rsatadi.",
-=======
-        "/@pwd": "Joriy ishchi katalogni (working directory) ko‘rsatadi.",
->>>>>>> 4503cc9bae3d0ab9e354c7209726c8f83263fca2
         "whoami": "Hozirda tizimda ishlayotgan foydalanuvchi nomini ko‘rsatadi.",
         "cd": "Katalogga kirish yoki orqaga qaytish uchun ishlatiladi. (ex: cd /home/user yoki cd ..)",
         "ls": "Katalog ichidagi fayllarni ko‘rsatadi.",
