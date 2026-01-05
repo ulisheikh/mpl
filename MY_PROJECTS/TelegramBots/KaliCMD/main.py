@@ -28,7 +28,7 @@ from aiogram.types import Message
 REPO_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # ------------- CONFIG -------------
-BOT_TOKEN = "8284065959:AAEB1_8uVcXpMZCCQEfM8g2ZjKrDOh4ytY4"
+BOT_TOKEN = "8515364508:AAG6DLaVbwLirYtqpKaqupzkMLmApoMzYYw"
 TC_PY = "tc.py"
 STATE_FILE = "quiz_state.json"
 BLOCK_INTERVAL_MIN = 12
