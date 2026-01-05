@@ -82,7 +82,7 @@ ltc = {
 }
 
 def print_chapters():
-    """Har bir bobdagi komandalarni tartibli chiqaradigan qismi"""
+    """Har bir bobdagi komandalarni tartibli chiqaradigan qismi """
     for chapter, commands in ltc.items():
         indent = " " * 15
         print(f"\n{indent}{'=' * 35}")
