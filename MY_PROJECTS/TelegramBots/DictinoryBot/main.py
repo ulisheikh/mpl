@@ -106,13 +106,14 @@ def get_location_text(uid):
         return "❌ Hozir hech qayerda emasmiz"
     
     return "📍 " + " > ".join(location)
-
 # --- KEYBOARDS ---
 def get_main_keyboard():
     markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
+    # Har bir tugma alohida qatorda chiqishi uchun row() dan foydalanamiz
     markup.row("▶️ START")
     markup.row("📂 BO'LIMLAR")
     markup.row("📥 DOWNLOAD DICTIONARY")
+    markup.row("🔄 UPDATE")  # 4-tugma sifatida qo'shildi
     return markup
 
 def get_help_text():
@@ -130,7 +131,7 @@ def get_help_text():
         "   ?listening\n\n"
 
         "3️⃣ SAVOL RAQAMI\n"
-        "   .1 yoki .2 yoki .3 ... .30\n\n"
+        "   1. yoki 2. yoki 3. ... 30.\n\n"  # .1 dan 1. ga o'zgartirildi
 
         "4️⃣ HOZIRGI JOYINGIZ\n"
         "   %l   — joylashuvni ko‘rish\n\n"
@@ -154,13 +155,18 @@ def get_help_text():
         "   /status\n\n"
         
         "GIT PULL QILISH\n"
-        "   /update\n\n"
+        "   /update  yoki  🔄 UPDATE tugmasi\n\n"
         
         "💡 >  ?  .  belgilar orqali\n"
         "   yangi topik / savol turi /\n"
         "   savol yaratish mumkin"
     )
 
+# --- UPDATE TUGMASI HANDLERI ---
+# Bu qismni handlerlar (content_types=['text']) bo'limiga qo'shishni unutmang:
+@bot.message_handler(func=lambda m: m.text == "🔄 UPDATE")
+def update_button_handler(message):
+    update_bot(message)
 
 # --- HANDLERS ---
 @bot.message_handler(commands=['update'])

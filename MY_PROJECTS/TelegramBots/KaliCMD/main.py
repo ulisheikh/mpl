@@ -49,9 +49,6 @@ STATE_PATH = DATA_DIR / STATE_FILE
 TC_PATH = DATA_DIR / TC_PY
 
 
-
-
-
 @dp.message(Command("update"))
 async def update_bot(message: Message):
     await message.answer("🔄 Kod yangilanmoqda...")
@@ -85,6 +82,21 @@ async def update_bot(message: Message):
             f"❌ <b>Xato</b>\n<pre>{str(e)}</pre>",
             parse_mode="HTML"
         )
+
+
+# ===== UPDATE TUGMA QO‘SHISH =====
+
+update_kb = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="🔄 UPDATE")]
+    ],
+    resize_keyboard=True
+)
+
+@dp.message(F.text == "🔄 UPDATE")
+async def update_button_handler(message: Message):
+    await update_bot(message)
+
 
 
 # ---------- persistent state ----------
@@ -335,10 +347,14 @@ def evaluate_answer(user_text: str, correct_key: str):
         return False, f"⚠️ O‘xshash — lekin to‘liq emas. To‘g‘ri: <code>{correct_key}</code>"
     return False, f"❌ Noto‘g‘ri. Toʻgʻri buyruq: <code>{correct_key}</code>"
 
+# ===== TUGMALAR (KEYBOARDS) =====
+
+# Har bir tugma alohida qatorda (3 qator)
 main_kb = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="/start")],
-        [KeyboardButton(text="Menu")]
+        [KeyboardButton(text="Menu")],
+        [KeyboardButton(text="🔄 UPDATE")]
     ],
     resize_keyboard=True
 )
@@ -350,7 +366,8 @@ def main_menu_markup():
         [InlineKeyboardButton(text="CHAPTERLAR", callback_data="menu_chapters")]
     ])
 
-# ---------- handlers ----------
+# ---------- HANDLERS ----------
+
 @dp.message(F.text == "/start")
 async def cmd_start(msg: types.Message):
     add_or_update_user(msg.from_user)
@@ -365,13 +382,20 @@ async def cmd_start(msg: types.Message):
         "----------------------------------------\n"
         "💡 <i>Yordam: Buyruq haqida bilish uchun .buyruq (masalan: .ls) deb yozing.</i>"
     )
+    # 3 qatorli tugmalar to'plamini yuborish
     await msg.answer(help_text, reply_markup=main_kb, parse_mode="HTML")
     await msg.answer("<b>Asosiy menyu:</b>", reply_markup=main_menu_markup(), parse_mode="HTML")
 
 @dp.message(F.text == "Menu")
 async def msg_menu(msg: types.Message):
     add_or_update_user(msg.from_user)
+    # Menyuda ham asosiy tugmalar turishi uchun reply_markup qo'shildi
     await msg.answer("<b>Asosiy menyu:</b>", reply_markup=main_menu_markup(), parse_mode="HTML")
+
+@dp.message(F.text == "🔄 UPDATE")
+async def update_button_handler(message: types.Message):
+    # Tugma bosilganda yangilanish funksiyasini ishga tushirish
+    await update_bot(message)
 
 @dp.message(F.text.startswith("."))
 async def dot_info_handler(msg: types.Message):
@@ -396,7 +420,7 @@ async def dot_info_handler(msg: types.Message):
                 break
                 
     if best:
-        await msg.answer(f"📖 <b>Ma'lumot: {best[0]}</b>\n\n{best[1]}", parse_mode="HTML")
+        await msg.answer(f"📖 <b>Murojaat qilingan buyruq: \n> </b>{best[0]} \n\n{best[1]}", parse_mode="HTML")
     else:
         await msg.answer(f"❌ <b>{key}</b> buyrug'i topilmadi.", parse_mode="HTML")
 
