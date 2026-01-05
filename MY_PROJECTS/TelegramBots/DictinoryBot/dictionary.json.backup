@@ -1,0 +1,65 @@
+{
+    "Topik-35": {
+        "쓰기": {
+            "Q-1": {
+                "얼마나요": "qancha ekan",
+                "소": "sigir",
+                "배": "nok",
+                "호박": "oshqovoq",
+                "korea": "Salom"
+            }
+        },
+        "듣기": {
+            "Q-1": {
+                "하이": "salom",
+                "안녕!": "hayr"
+            }
+        },
+        "listening": {}
+    },
+    "Topik-36": {
+        "쓰기": {
+            "Q-1": {}
+        },
+        "reading": {}
+    },
+    "Topik-23": {},
+    "Topik-2": {
+        "reading": {}
+    },
+    "Topik-1": {
+        "reading": {
+            "Q-1": {
+                "책": "kitob"
+            },
+            "Q-2": {
+                "가방": "sumka"
+            },
+            "3-savol so'zlari": {}
+        },
+        "writing": {
+            "Q-2": {
+                "질문": "Savol"
+            }
+        }
+    },
+    "Topik-38": {
+        "reading": {
+            "Q-1": {
+                "안녕": "Salom",
+                "학교": "maktab",
+                "하니": "asal",
+                "홈": "uy",
+                "곱": "Ayiq"
+            }
+        }
+    },
+    "Topik-38 ?writing": {
+        "writing": {},
+        "dkdjdj": {},
+        "sjjs": {}
+    },
+    "Topik-46 ?reading .1": {},
+    "Topik-99": {},
+    "Topik-37": {}
+}
