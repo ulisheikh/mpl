@@ -12,7 +12,7 @@ import subprocess
 
 
 # --- CONFIGURATION ---
-TOKEN = "8046330769:AAF-JRhi1yug07Ng_UBSMA2wioKHybc5ub8"
+TOKEN = "8046756811:AAH-IYG99KEekGF5ndZVrpfQGAk_COLpMS0"
 DATA_FILE = "dictionary.json"
 START_TIME = datetime.now()
 
