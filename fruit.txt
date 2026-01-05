@@ -2,3 +2,4 @@ olma
 olcha
 anor
 nok
+tarvuz
