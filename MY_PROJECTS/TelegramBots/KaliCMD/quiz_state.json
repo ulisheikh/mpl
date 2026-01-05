@@ -25,8 +25,7 @@
       "menu_chapters",
       "view::chapter-3",
       "view::chapter-2",
-      "menu_chapters",
-      "view::chapter-2"
+      "menu_chapters"
     ],
     "unasked": [
       "ifconfig eth0 or wlan0 192.168.1.5",

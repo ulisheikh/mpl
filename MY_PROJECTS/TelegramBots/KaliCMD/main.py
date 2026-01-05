@@ -20,6 +20,13 @@ from aiogram.types import (
 )
 from difflib import SequenceMatcher
 
+import os
+import sys
+import subprocess
+from aiogram.filters import Command
+from aiogram.types import Message
+REPO_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # ------------- CONFIG -------------
 BOT_TOKEN = "8284065959:AAEB1_8uVcXpMZCCQEfM8g2ZjKrDOh4ytY4"
 TC_PY = "tc.py"
@@ -28,6 +35,7 @@ BLOCK_INTERVAL_MIN = 12
 QUESTIONS_PER_BLOCK = 5
 RELOAD_CHECK_SECONDS = 3
 USERS_DB = "users.db"
+
 # ----------------------------------
 
 logging.basicConfig(level=logging.INFO)
@@ -39,6 +47,45 @@ dp = Dispatcher()
 DATA_DIR = pathlib.Path(".")
 STATE_PATH = DATA_DIR / STATE_FILE
 TC_PATH = DATA_DIR / TC_PY
+
+
+
+
+
+@dp.message(Command("update"))
+async def update_bot(message: Message):
+    await message.answer("🔄 Kod yangilanmoqda...")
+
+    try:
+        result = subprocess.check_output(
+            ["git", "pull"],
+            cwd=REPO_DIR,
+            stderr=subprocess.STDOUT
+        ).decode("utf-8")
+
+        await message.answer(
+            "✅ <b>Git pull bajarildi</b>\n\n"
+            f"<pre>{result}</pre>\n\n"
+            "♻️ Bot qayta ishga tushyapti...",
+            parse_mode="HTML"
+        )
+
+        # 🔁 BOTNI TO‘LIQ RESTART
+        python = sys.executable
+        os.execv(python, [python] + sys.argv)
+
+    except subprocess.CalledProcessError as e:
+        await message.answer(
+            f"❌ <b>Git xato</b>\n\n<pre>{e.output.decode()}</pre>",
+            parse_mode="HTML"
+        )
+
+    except Exception as e:
+        await message.answer(
+            f"❌ <b>Xato</b>\n<pre>{str(e)}</pre>",
+            parse_mode="HTML"
+        )
+
 
 # ---------- persistent state ----------
 def load_state() -> Dict:
