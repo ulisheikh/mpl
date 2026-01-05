@@ -152,7 +152,10 @@ def get_help_text():
 
         "🔟 TIZIM HOLATI\n"
         "   /status\n\n"
-
+        
+        "GIT PULL QILISH\n"
+        "   /update\n\n"
+        
         "💡 >  ?  .  belgilar orqali\n"
         "   yangi topik / savol turi /\n"
         "   savol yaratish mumkin"
