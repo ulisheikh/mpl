@@ -9,6 +9,8 @@ env/
 ENV/
 env.bak/
 venv.bak/
+myenv/
+my_env/
 
 # --- Python bytecode ---
 __pycache__/
