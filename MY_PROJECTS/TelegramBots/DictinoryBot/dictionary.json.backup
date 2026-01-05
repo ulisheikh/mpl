@@ -4,7 +4,17 @@
             "1-savol so'zlari": {
                 "안녕": "Salom"
             },
-            "2-savol so'zlari": {}
+            "2-savol so'zlari": {
+                "허니": "asal"
+            },
+            "3-savol so'zlari": {}
+        }
+    },
+    "Topik-36": {
+        "writing": {
+            "1-savol so'zlari": {
+                "씨발": "Poxxuy"
+            }
         }
     }
 }

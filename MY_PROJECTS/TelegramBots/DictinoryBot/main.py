@@ -7,6 +7,9 @@ import psutil
 import threading
 import time
 from datetime import datetime
+import sys
+import subprocess
+
 
 # --- CONFIGURATION ---
 TOKEN = "8046330769:AAF-JRhi1yug07Ng_UBSMA2wioKHybc5ub8"
@@ -16,6 +19,9 @@ START_TIME = datetime.now()
 bot = telebot.TeleBot(TOKEN)
 user_context = {}
 ADMIN_ID = 8046330769 
+REPO_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
 
 # --- DATA MANAGEMENT ---
 def load_data():
@@ -111,48 +117,73 @@ def get_main_keyboard():
 
 def get_help_text():
     return (
-        "╔═════════╗\n"
-        "║  📚 LUG'AT BOT    ║\n"
-        "╚═════════╝\n\n"
-        
+        "📚 LUG'AT BOT\n"
+        "━━━━━━━━━━━━\n\n"
+
         "1️⃣ TOPIK TANLASH\n"
         "   >35 yoki >36 yoki >37\n"
-        "   >35. (tezkor kirish)\n\n"
-        
+        "   >35.  (tezkor kirish)\n\n"
+
         "2️⃣ SAVOL TURI TANLASH\n"
         "   ?reading\n"
         "   ?writing\n"
         "   ?listening\n\n"
-        
+
         "3️⃣ SAVOL RAQAMI\n"
         "   .1 yoki .2 yoki .3 ... .30\n\n"
-        
+
         "4️⃣ HOZIRGI JOYINGIZ\n"
-        "   %l - joylashuvni ko'rish\n\n"
-        
-        "5️⃣ SO'Z QO'SHISH\n"
-        "   학교 maktab (ikki til)\n\n"
-        
-        "6️⃣ SO'ZNI O'ZGARTIRISH\n"
+        "   %l   — joylashuvni ko‘rish\n\n"
+
+        "5️⃣ SO‘Z QO‘SHISH\n"
+        "   학교 maktab   (ikki til)\n\n"
+
+        "6️⃣ SO‘ZNI O‘ZGARTIRISH\n"
         "   eski.yangi\n\n"
-        
-        "7️⃣ SO'ZNI O'CHIRISH\n"
-        "   rm.so'z\n\n"
-        
-        "8️⃣ TOPIKNI O'CHIRISH\n"
-        "   rm.35 (butun topik)\n\n"
-        
-        "9️⃣ SO'Z QIDIRISH\n"
-        "   s.so'z\n\n"
-        
+
+        "7️⃣ SO‘ZNI O‘CHIRISH\n"
+        "   rm.so‘z\n\n"
+
+        "8️⃣ TOPIKNI O‘CHIRISH\n"
+        "   rm.35   (butun topik)\n\n"
+
+        "9️⃣ SO‘Z QIDIRISH\n"
+        "   s.so‘z\n\n"
+
         "🔟 TIZIM HOLATI\n"
         "   /status\n\n"
-        
-        "💡 >?. belgilari orqali yangi\n"
-        "   topik/savol turi/savol yarating!"
+
+        "💡 >  ?  .  belgilar orqali\n"
+        "   yangi topik / savol turi /\n"
+        "   savol yaratish mumkin"
     )
 
+
 # --- HANDLERS ---
+@bot.message_handler(commands=['update'])
+def update_bot(message):
+    bot.send_message(message.chat.id, "🔄 Kod yangilanmoqda...")
+
+    try:
+        result = subprocess.check_output(
+            ["git", "pull"],
+            cwd=REPO_DIR,
+            stderr=subprocess.STDOUT
+        ).decode()
+
+        bot.send_message(
+            message.chat.id,
+            f"✅ Git pull bajarildi:\n\n{result}\n\n♻️ Bot qayta ishga tushyapti..."
+        )
+
+        # BOTNI TO‘LIQ RESTART
+        python = sys.executable
+        os.execv(python, [python] + sys.argv)
+
+    except Exception as e:
+        bot.send_message(message.chat.id, f"❌ Update xato:\n{e}")
+
+
 
 @bot.message_handler(commands=['start'])
 def welcome_cmd(message):
@@ -426,17 +457,18 @@ def handle_all(message):
             f"Endi savol tartib raqamini kiriting:\n"
             f".1 yoki .2 yoki .3 ..."
         )
-        return
-
-    # 3. SAVOL RAQAMI TANLASH/YARATISH (.1)
-    if text.startswith(".") and text[1:].strip().isdigit():
+# 3. SAVOL RAQAMI TANLASH/YARATISH (1.)
+    # text.endswith(".") - oxiri nuqta bilan tugashini tekshiradi
+    # text[:-1].isdigit() - nuqtadan oldingi hamma narsa raqam ekanini tekshiradi
+    if text.endswith(".") and text[:-1].strip().isdigit():
         if uid not in user_context or not user_context[uid].get("section"):
             return bot.send_message(
                 message.chat.id,
                 "⚠️ Avval savol turini tanlang\n\nMisol: ?reading"
             )
         
-        q_num = text[1:].strip()
+        # text[:-1] - oxiridagi nuqtani tashlab yuborib, faqat raqamni oladi
+        q_num = text[:-1].strip()
         q_name = f"{q_num}-savol so'zlari"
         
         topic_key = user_context[uid]["topic"]
@@ -458,7 +490,6 @@ def handle_all(message):
             f"✅ {topic_num}-topik > {section_key} > {q_num}-savol so'zlarini kiriting"
         )
         return
-
     # 4. O'CHIRISH (rm.apple yoki rm.35)
     if text.lower().startswith("rm."):
         target = text[3:].strip()
