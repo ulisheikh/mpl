@@ -4,7 +4,7 @@ print("\n📘 Linux Terminal komandalarining to‘liq lug‘ati yuklanmoqda...\n
 
 ltc = {
     "chapter-1": {
-        "/pwd": "Joriy ishchi katalogni (working directory) ko‘rsatadi.",
+        "pwd": "Joriy ishchi katalogni (working directory) ko‘rsatadi.",
         "whoami": "Hozirda tizimda ishlayotgan foydalanuvchi nomini ko‘rsatadi.",
         "cd": "Katalogga kirish yoki orqaga qaytish uchun ishlatiladi. (ex: cd /home/user yoki cd ..)",
         "ls": "Katalog ichidagi fayllarni ko‘rsatadi.",
@@ -82,7 +82,7 @@ ltc = {
 }
 
 def print_chapters():
-    """Har bir bobdagi komandalarni tartibli chiqaradigan qismi """
+    """Har bir bobdagi komandalarni tartibli chiqaradigan"""
     for chapter, commands in ltc.items():
         indent = " " * 15
         print(f"\n{indent}{'=' * 35}")
