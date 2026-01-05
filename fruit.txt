@@ -1,9 +1,4 @@
 olma
 olcha
 nok
-<<<<<<< HEAD
-apelsin
-=======
-tarvuz
->>>>>>> 042bf30caa992d3e7d8b19f37574eeb908bba4fa
-+
+gilos
