@@ -10,6 +10,7 @@ from datetime import datetime
 import sys
 import subprocess
 
+
 # --- CONFIGURATION ---
 TOKEN = "8046756811:AAEsMXNBMkIMkqM3XtVyQ3OzOd4itRfn03M"
 DATA_FILE = "dictionary.json"
