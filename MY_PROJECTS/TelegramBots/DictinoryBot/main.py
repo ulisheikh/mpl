@@ -9,7 +9,57 @@ import time
 from datetime import datetime
 import sys
 import subprocess
+# ================= TERMUX API FIX (TELEBOT) =================
 
+from telebot import types
+
+# 5-tugmali keyboard (FIX API eng pastda)
+def main_keyboard():
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    kb.row("📚 Lug‘at", "🔍 Qidirish")
+    kb.row("➕ So‘z qo‘shish", "✏️ Tahrirlash")
+    kb.row("🔧 FIX API")  # 5-tugma, ENG PASTIDA
+    return kb
+
+
+# FIX API tugmasi bosilganda
+@bot.message_handler(func=lambda m: m.text == "🔧 FIX API")
+def fix_termux_api(message):
+    bot.send_message(
+        message.chat.id,
+        "🔧 Termux API uyg‘otilmoqda...\n"
+        "⏳ Iltimos, kuting"
+    )
+
+    try:
+        # Battery API'ni uyg‘otish
+        subprocess.run(
+            ["termux-battery-status"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+
+        # Wake lock (uxlab qolmasligi uchun)
+        subprocess.run(
+            ["termux-wake-lock"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+
+        bot.send_message(
+            message.chat.id,
+            "✅ Termux API qayta faollashtirildi\n"
+            "🔋 Battery API uyg‘ondi\n"
+            "🔒 WakeLock yoqildi"
+        )
+
+    except Exception as e:
+        bot.send_message(
+            message.chat.id,
+            f"❌ Termux API xato:\n{e}"
+        )
+
+# ============================================================
 
 # --- CONFIGURATION ---
 TOKEN = "8046756811:AAEsMXNBMkIMkqM3XtVyQ3OzOd4itRfn03M"
