@@ -16,7 +16,56 @@
         "writing": {
             "1-savol so'zlari": {
                 "씨발": "Poxxuy",
-                "안녕":"Salom"
+                "안녕": "Salom"
+            }
+        }
+    },
+    "Topik-34": {},
+    "Topik-33": {},
+    "Topik-00": {
+        "writing": {
+            "1-savol so'zlari": {}
+        }
+    },
+    "Topik-01": {},
+    "Topik-02": {
+        "test": {},
+        "fil": {},
+        "ot": {
+            "1-savol so'zlari": {
+                "otni 민드": "olim"
+            }
+        }
+    },
+    "Topik-03": {
+        "til": {
+            "1-savol so'zlari": {
+                "뱌ㅛㅡㅁㅅ": "kalit"
+            }
+        }
+    },
+    "Topik-04": {
+        "ㅏㅑㅅ\\": {
+            "1-savol so'zlari": {
+                "아누리": "kla"
+            }
+        }
+    },
+    "Topik-05": {
+        "reading": {
+            "1-savol so'zlari": {
+                "남": "ldkl"
+            }
+        }
+    },
+    "Topik-06": {},
+    "Topik-07": {
+        "ilm": {}
+    },
+    "Topik-8": {
+        "reading": {
+            "1-savol so'zlari": {
+                "셯": "salom"
             }
         }
     }

@@ -1,4 +1,4 @@
-# main.py  (Aiogram 3) — Updated with Beautiful Chapter View
+# main.py  (Aiogram 3) — Updated: Removed Update Functionality
 import asyncio
 import importlib.util
 import json
@@ -7,7 +7,6 @@ import pathlib
 import random
 import re
 import sqlite3
-import time
 from datetime import datetime, timedelta
 from typing import Dict, Tuple, Optional
 
@@ -19,13 +18,8 @@ from aiogram.types import (
     InlineKeyboardButton,
 )
 from difflib import SequenceMatcher
-
-import os
-import sys
-import subprocess
 from aiogram.filters import Command
 from aiogram.types import Message
-REPO_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # ------------- CONFIG -------------
 BOT_TOKEN = "8515364508:AAG6DLaVbwLirYtqpKaqupzkMLmApoMzYYw"
@@ -35,7 +29,6 @@ BLOCK_INTERVAL_MIN = 12
 QUESTIONS_PER_BLOCK = 5
 RELOAD_CHECK_SECONDS = 3
 USERS_DB = "users.db"
-
 # ----------------------------------
 
 logging.basicConfig(level=logging.INFO)
@@ -47,57 +40,6 @@ dp = Dispatcher()
 DATA_DIR = pathlib.Path(".")
 STATE_PATH = DATA_DIR / STATE_FILE
 TC_PATH = DATA_DIR / TC_PY
-
-
-@dp.message(Command("update"))
-async def update_bot(message: Message):
-    await message.answer("🔄 Kod yangilanmoqda...")
-
-    try:
-        result = subprocess.check_output(
-            ["git", "pull"],
-            cwd=REPO_DIR,
-            stderr=subprocess.STDOUT
-        ).decode("utf-8")
-
-        await message.answer(
-            "✅ <b>Git pull bajarildi</b>\n\n"
-            f"<pre>{result}</pre>\n\n"
-            "♻️ Bot qayta ishga tushyapti...",
-            parse_mode="HTML"
-        )
-
-        # 🔁 BOTNI TO‘LIQ RESTART
-        python = sys.executable
-        os.execv(python, [python] + sys.argv)
-
-    except subprocess.CalledProcessError as e:
-        await message.answer(
-            f"❌ <b>Git xato</b>\n\n<pre>{e.output.decode()}</pre>",
-            parse_mode="HTML"
-        )
-
-    except Exception as e:
-        await message.answer(
-            f"❌ <b>Xato</b>\n<pre>{str(e)}</pre>",
-            parse_mode="HTML"
-        )
-
-
-# ===== UPDATE TUGMA QO‘SHISH =====
-
-update_kb = ReplyKeyboardMarkup(
-    keyboard=[
-        [KeyboardButton(text="🔄 UPDATE")]
-    ],
-    resize_keyboard=True
-)
-
-@dp.message(F.text == "🔄 UPDATE")
-async def update_button_handler(message: Message):
-    await update_bot(message)
-
-
 
 # ---------- persistent state ----------
 def load_state() -> Dict:
@@ -159,14 +101,6 @@ def set_subscription_db(user_id: int, is_sub: bool):
     cur.execute("UPDATE users SET is_subscribed = ?, last_active = ? WHERE user_id = ?", (1 if is_sub else 0, datetime.now().isoformat(), user_id))
     conn.commit()
     conn.close()
-
-def get_all_users(limit: int = 200):
-    conn = sqlite3.connect(USERS_DB)
-    cur = conn.cursor()
-    cur.execute("SELECT user_id, username, full_name, joined_at, last_active, is_subscribed FROM users ORDER BY joined_at DESC LIMIT ?", (limit,))
-    rows = cur.fetchall()
-    conn.close()
-    return rows
 
 # ---------- load tc.py dynamically ----------
 def load_ltc_from_py() -> Dict[str, Dict[str, str]]:
@@ -349,12 +283,11 @@ def evaluate_answer(user_text: str, correct_key: str):
 
 # ===== TUGMALAR (KEYBOARDS) =====
 
-# Har bir tugma alohida qatorda (3 qator)
+# Update tugmasi olib tashlandi
 main_kb = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="/start")],
-        [KeyboardButton(text="Menu")],
-        [KeyboardButton(text="🔄 UPDATE")]
+        [KeyboardButton(text="Menu")]
     ],
     resize_keyboard=True
 )
@@ -382,20 +315,13 @@ async def cmd_start(msg: types.Message):
         "----------------------------------------\n"
         "💡 <i>Yordam: Buyruq haqida bilish uchun .buyruq (masalan: .ls) deb yozing.</i>"
     )
-    # 3 qatorli tugmalar to'plamini yuborish
     await msg.answer(help_text, reply_markup=main_kb, parse_mode="HTML")
     await msg.answer("<b>Asosiy menyu:</b>", reply_markup=main_menu_markup(), parse_mode="HTML")
 
 @dp.message(F.text == "Menu")
 async def msg_menu(msg: types.Message):
     add_or_update_user(msg.from_user)
-    # Menyuda ham asosiy tugmalar turishi uchun reply_markup qo'shildi
     await msg.answer("<b>Asosiy menyu:</b>", reply_markup=main_menu_markup(), parse_mode="HTML")
-
-@dp.message(F.text == "🔄 UPDATE")
-async def update_button_handler(message: types.Message):
-    # Tugma bosilganda yangilanish funksiyasini ishga tushirish
-    await update_bot(message)
 
 @dp.message(F.text.startswith("."))
 async def dot_info_handler(msg: types.Message):
@@ -472,31 +398,23 @@ async def cb_menu(cq: types.CallbackQuery):
         ch = data.split("::", 1)[1]
         ltc_local = load_ltc_from_py()
         if ch in ltc_local:
-            # TOPSHIRIQ: Chapter ma'lumotlarini chiroyli chiqarish
             header = f"📘 <b>{ch.upper()}</b>\n"
             header += "━━━━━━━━━━━━━━━━━━\n\n"
-            
             lines = []
             for k, v in ltc_local[ch].items():
-                # Buyruqni kod blogida, izohni esa yangi qatordan chiroyli tab bilan chiqarish
                 line = f"▶️ <code>{k}</code>\n"
                 line += f"  ┗ <i>{v}</i>\n"
                 lines.append(line)
-            
             full_text = header + "\n".join(lines)
-            
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="⬅️ Orqaga", callback_data="back_to_chapters")]
             ])
-            
             st = state.setdefault(uid, {})
             st.setdefault("menu_stack", []).append(f"view::{ch}")
             save_state(state)
-            
             try:
                 await cq.message.edit_text(full_text, reply_markup=kb, parse_mode="HTML")
             except Exception:
-                # Agar xabar juda uzun bo'lib ketsa (Telegram limiti 4096 belgi), alohida yuborish
                 await cq.message.answer(full_text, reply_markup=kb, parse_mode="HTML")
         else:
             await cq.message.answer("Bunday bo‘lim topilmadi.")
@@ -527,7 +445,6 @@ async def cb_menu(cq: types.CallbackQuery):
         ])
         save_state(state)
         await cq.message.edit_text("📂 <b>Bo‘limni tanlang:</b>", reply_markup=kb, parse_mode="HTML")
-
     await cq.answer()
 
 @dp.message()
@@ -535,12 +452,10 @@ async def generic_handler(msg: types.Message):
     text = (msg.text or "").strip()
     if text.startswith("."):
         return
-        
     uid = str(msg.chat.id)
     add_or_update_user(msg.from_user)
     st = state.setdefault(uid, {})
     cur = st.get("current")
-    
     if cur:
         is_ok, feedback = evaluate_answer(text, cur)
         await msg.answer(feedback, parse_mode="HTML")
@@ -549,12 +464,10 @@ async def generic_handler(msg: types.Message):
         mode = st.get("current_mode")
         st["current"] = None
         save_state(state)
-        
         if st.get("continuous"):
             await asyncio.sleep(0.5)
             await send_single_question(uid)
             return
-            
         if mode == "block" and st.get("in_block"):
             st["remaining"] = max(0, st.get("remaining", 0) - 1)
             save_state(state)
@@ -564,7 +477,6 @@ async def generic_handler(msg: types.Message):
             else:
                 await finish_block(uid)
         return
-
     await msg.answer("Hozir savol yo‘q. Menu tugmasini bosing.", reply_markup=main_kb)
 
 # ---------- scheduler & loops ----------
@@ -585,7 +497,7 @@ async def scheduler_loop():
                 if now >= nxt_dt:
                     asyncio.create_task(start_block_for_user(uid))
             await asyncio.sleep(RELOAD_CHECK_SECONDS)
-        except Exception as e:
+        except Exception:
             await asyncio.sleep(5)
 
 async def auto_reload_loop():

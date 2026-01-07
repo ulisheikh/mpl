@@ -7,11 +7,8 @@ import psutil
 import threading
 import time
 from datetime import datetime
-import sys
-import subprocess
 
-
-# --- CONFIGURATION ---
+# --- KONFIGURATSIYA ---
 TOKEN = "8046756811:AAEsMXNBMkIMkqM3XtVyQ3OzOd4itRfn03M"
 DATA_FILE = "dictionary.json"
 START_TIME = datetime.now()
@@ -19,13 +16,10 @@ START_TIME = datetime.now()
 bot = telebot.TeleBot(TOKEN)
 user_context = {}
 ADMIN_ID = 8046330769 
-REPO_DIR = os.path.dirname(os.path.abspath(__file__))
 
-
-
-# --- DATA MANAGEMENT ---
+# --- MA'LUMOTLAR BILAN ISHLASH ---
 def load_data():
-    """Lug'at faylini yuklash va eski formatni yangilash"""
+    """Lug'at faylini yuklash va eski formatni yangilassh"""
     if os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, 'r', encoding='utf-8') as f:
@@ -42,7 +36,6 @@ def load_data():
                 else:
                     new_data[key] = value
             
-            # Agar o'zgarish bo'lsa, saqlash
             if updated:
                 save_data(new_data)
                 return new_data
@@ -67,16 +60,56 @@ def save_data(data):
     except Exception as e:
         print(f"Save error: {e}")
 
+def json_to_python():
+    """JSON ni Python kodiga o'girish"""
+    data = load_data()
+    
+    py_code = "# -*- coding: utf-8 -*-\n"
+    py_code += "# LUG'AT MA'LUMOTLARI\n"
+    py_code += "# Avtomatik yaratilgan fayl\n\n"
+    py_code += "dictionary = {\n"
+    
+    for topic_key, sections in data.items():
+        topic_num = topic_key.replace("Topik-", "")
+        py_code += f"    # {topic_num}-TOPIK\n"
+        py_code += f'    "{topic_key}": {{\n'
+        
+        for section_key, questions in sections.items():
+            py_code += f'        "{section_key}": {{\n'
+            
+            for question_key, words in questions.items():
+                q_num = question_key.replace("-savol so'zlari", "")
+                py_code += f'            # {q_num}-savol\n'
+                py_code += f'            "{question_key}": {{\n'
+                
+                for kr, uz in words.items():
+                    py_code += f'                "{kr}": "{uz}",\n'
+                
+                py_code += '            },\n'
+            
+            py_code += '        },\n'
+        
+        py_code += '    },\n'
+    
+    py_code += '}\n\n'
+    py_code += '# Ma\'lumotlarga kirish:\n'
+    py_code += '# print(dictionary["Topik-35"]["reading"]["1-savol so\'zlari"])\n'
+    
+    return py_code
+
 def is_korean(text):
+    """Koreyscha matnni aniqlash"""
     return bool(re.search('[\uac00-\ud7af]', text))
 
 def get_uptime():
+    """Bot ishlash vaqti"""
     delta = datetime.now() - START_TIME
     hours, remainder = divmod(int(delta.total_seconds()), 3600)
     minutes, seconds = divmod(remainder, 60)
     return f"{hours}h {minutes}m {seconds}s"
 
 def get_battery():
+    """Batareya holati"""
     try:
         out = subprocess.check_output(["termux-battery-status"], timeout=5).decode()
         return json.loads(out)
@@ -106,110 +139,76 @@ def get_location_text(uid):
         return "❌ Hozir hech qayerda emasmiz"
     
     return "📍 " + " > ".join(location)
-# --- KEYBOARDS ---
+
+# --- KLAVIATURALAR ---
 def get_main_keyboard():
+    """Asosiy klaviatura"""
     markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
-    # Har bir tugma alohida qatorda chiqishi uchun row() dan foydalanamiz
-    markup.row("▶️ START")
+    markup.row("/start")
     markup.row("📂 BO'LIMLAR")
-    markup.row("📥 DOWNLOAD DICTIONARY")
-    markup.row("🔄 UPDATE")  # 4-tugma sifatida qo'shildi
+    markup.row("📥 JSON", "🐍 PYTHON")
     return markup
 
 def get_help_text():
+    """Yordam matni"""
     return (
-        "📚 LUG'AT BOT\n"
-        "━━━━━━━━━━━━\n\n"
-
+        "╔════════════════════════╗\n"
+        "║    📚 LUG'AT BOT       ║\n"
+        "╚════════════════════════╝\n\n"
+        
         "1️⃣ TOPIK TANLASH\n"
         "   >35 yoki >36 yoki >37\n"
-        "   >35.  (tezkor kirish)\n\n"
-
+        "   >35. (tezkor kirish)\n\n"
+        
         "2️⃣ SAVOL TURI TANLASH\n"
         "   ?reading\n"
         "   ?writing\n"
         "   ?listening\n\n"
-
+        
         "3️⃣ SAVOL RAQAMI\n"
-        "   1. yoki 2. yoki 3. ... 30.\n\n"  # .1 dan 1. ga o'zgartirildi
-
+        "   1. yoki 2. yoki 3. ... 30.\n\n"
+        
         "4️⃣ HOZIRGI JOYINGIZ\n"
-        "   %l   — joylashuvni ko‘rish\n\n"
-
-        "5️⃣ SO‘Z QO‘SHISH\n"
-        "   학교 maktab   (ikki til)\n\n"
-
-        "6️⃣ SO‘ZNI O‘ZGARTIRISH\n"
+        "   %l - joylashuvni ko'rish\n\n"
+        
+        "5️⃣ SO'Z QO'SHISH\n"
+        "   학교 maktab (ikki til)\n\n"
+        
+        "6️⃣ SO'ZNI O'ZGARTIRISH\n"
         "   eski.yangi\n\n"
-
-        "7️⃣ SO‘ZNI O‘CHIRISH\n"
-        "   rm.so‘z\n\n"
-
-        "8️⃣ TOPIKNI O‘CHIRISH\n"
-        "   rm.35   (butun topik)\n\n"
-
-        "9️⃣ SO‘Z QIDIRISH\n"
-        "   s.so‘z\n\n"
-
+        
+        "7️⃣ SO'ZNI O'CHIRISH\n"
+        "   rm.so'z\n\n"
+        
+        "8️⃣ TOPIKNI O'CHIRISH\n"
+        "   rm.35 (butun topik)\n\n"
+        
+        "9️⃣ SO'Z QIDIRISH\n"
+        "   s.so'z\n\n"
+        
         "🔟 TIZIM HOLATI\n"
         "   /status\n\n"
         
-        "GIT PULL QILISH\n"
-        "   /update  yoki  🔄 UPDATE tugmasi\n\n"
-        
-        "💡 >  ?  .  belgilar orqali\n"
-        "   yangi topik / savol turi /\n"
-        "   savol yaratish mumkin"
+        "💡 >?. belgilari orqali yangi\n"
+        "   topik/savol turi/savol yarating!"
     )
 
-# --- UPDATE TUGMASI HANDLERI ---
-# Bu qismni handlerlar (content_types=['text']) bo'limiga qo'shishni unutmang:
-@bot.message_handler(func=lambda m: m.text == "🔄 UPDATE")
-def update_button_handler(message):
-    update_bot(message)
-
-# --- HANDLERS ---
-@bot.message_handler(commands=['update'])
-def update_bot(message):
-    bot.send_message(message.chat.id, "🔄 Kod yangilanmoqda...")
-
-    try:
-        result = subprocess.check_output(
-            ["git", "pull"],
-            cwd=REPO_DIR,
-            stderr=subprocess.STDOUT
-        ).decode()
-
-        bot.send_message(
-            message.chat.id,
-            f"✅ Git pull bajarildi:\n\n{result}\n\n♻️ Bot qayta ishga tushyapti..."
-        )
-
-        # BOTNI TO‘LIQ RESTART
-        python = sys.executable
-        os.execv(python, [python] + sys.argv)
-
-    except Exception as e:
-        bot.send_message(message.chat.id, f"❌ Update xato:\n{e}")
-
-
+# --- HANDLERLAR ---
 
 @bot.message_handler(commands=['start'])
 def welcome_cmd(message):
-    bot.send_message(message.chat.id, get_help_text(), reply_markup=get_main_keyboard())
-
-@bot.message_handler(func=lambda m: m.text == "▶️ START")
-def welcome_btn(message):
+    """Start komandasi"""
     bot.send_message(message.chat.id, get_help_text(), reply_markup=get_main_keyboard())
 
 @bot.message_handler(commands=['status'])
 def status_cmd(message):
+    """Tizim holati"""
     bat = get_battery()
     ram = psutil.virtual_memory()
     
-    msg = "╔═════════╗\n"
-    msg += "║ 📊 TIZIM HOLATI  ║\n"
-    msg += "╚═════════╝\n\n"
+    msg = "╔════════════════════════╗\n"
+    msg += "║   📊 TIZIM HOLATI      ║\n"
+    msg += "╚════════════════════════╝\n\n"
     msg += f"⏱ Ishlash vaqti: {get_uptime()}\n\n"
     
     if bat:
@@ -222,7 +221,7 @@ def status_cmd(message):
     msg += f"🧠 RAM: {ram.percent}%\n"
     msg += f"💾 RAM hajmi: {ram.used // (1024**2)}MB / {ram.total // (1024**2)}MB\n\n"
     
-    # Bot fayl hajmi
+    # Lug'at hajmi
     try:
         if os.path.exists(DATA_FILE):
             file_size = os.path.getsize(DATA_FILE)
@@ -238,39 +237,76 @@ def status_cmd(message):
     
     bot.send_message(message.chat.id, msg)
 
-@bot.message_handler(func=lambda m: m.text == "📥 DOWNLOAD DICTIONARY")
-def export_file(message):
+@bot.message_handler(func=lambda m: m.text == "📥 JSON")
+def export_json(message):
+    """JSON fayl yuklash"""
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, 'rb') as f:
-            bot.send_document(message.chat.id, f, caption="📥 Lug'at fayli")
+            bot.send_document(
+                message.chat.id, 
+                f, 
+                caption="📥 Lug'at fayli (JSON format)"
+            )
     else: 
         bot.send_message(message.chat.id, "❌ Lug'at bo'sh")
 
+@bot.message_handler(func=lambda m: m.text == "🐍 PYTHON")
+def export_python(message):
+    """Python fayl yaratish va yuklash"""
+    data = load_data()
+    
+    if not data:
+        return bot.send_message(message.chat.id, "❌ Lug'at bo'sh")
+    
+    # Python kodini yaratish
+    py_code = json_to_python()
+    
+    # Vaqtinchalik fayl yaratish
+    py_file = "dictionary.py"
+    with open(py_file, 'w', encoding='utf-8') as f:
+        f.write(py_code)
+    
+    # Faylni yuborish
+    with open(py_file, 'rb') as f:
+        bot.send_document(
+            message.chat.id,
+            f,
+            caption="🐍 Lug'at fayli (Python format)\n\nFoydalanish:\n```python\nfrom dictionary import dictionary\nprint(dictionary)\n```",
+            parse_mode="Markdown"
+        )
+    
+    # Vaqtinchalik faylni o'chirish
+    try:
+        os.remove(py_file)
+    except:
+        pass
+
 @bot.message_handler(func=lambda m: m.text == "📂 BO'LIMLAR")
 def show_sections(message):
+    """Barcha topiklar"""
     data = load_data()
     if not data: 
         return bot.send_message(message.chat.id, "❌ Lug'at bo'sh")
     
     msg = "📂 MAVJUD TOPIKLAR:\n\n"
     
-    # Faqat to'g'ri formatdagi topiklar
+    # Barcha topiklar (0 bilan boshlanganlarni ham qo'shish)
     topics = []
     for topic_key in data.keys():
         if topic_key.startswith("Topik-"):
             topic_num = topic_key.replace("Topik-", "")
-            # Faqat raqamli topiklar (noto'g'ri formatlarni o'tkazib yuborish)
+            # Raqamli bo'lishi kerak
             if topic_num.isdigit():
                 topics.append(int(topic_num))
     
-    # Raqam bo'yicha saralash
     topics_sorted = sorted(topics)
     
     if not topics_sorted:
         return bot.send_message(message.chat.id, "❌ To'g'ri topiklar yo'q")
     
     for topic_num in topics_sorted:
-        msg += f"/Topik{topic_num}\n"
+        # 0 bilan boshlanuvchilarni ham to'g'ri ko'rsatish
+        msg += f"/Topik{topic_num:02d}\n" if topic_num < 10 else f"/Topik{topic_num}\n"
     
     msg += "\n💡 Topikni tanlash uchun bosing"
     
@@ -278,9 +314,9 @@ def show_sections(message):
 
 @bot.message_handler(regexp=r'^/Topik\d+$')
 def show_topic_sections(message):
-    """Topik ichidagi savol turlarini ko'rsatish"""
-    # /Topik35 dan 35 ni olish
-    topic_num = message.text.replace("/Topik", "")
+    """Topik ichidagi savol turlar"""
+    topic_num_str = message.text.replace("/Topik", "")
+    topic_num = int(topic_num_str)  # 05 -> 5 ga aylanadi
     topic_key = f"Topik-{topic_num}"
     data = load_data()
     
@@ -305,7 +341,6 @@ def show_topic_sections(message):
     
     msg += f"\n💡 Savol turini tanlash uchun bosing"
     
-    # Context saqlash
     uid = message.from_user.id
     if uid not in user_context:
         user_context[uid] = {}
@@ -315,7 +350,7 @@ def show_topic_sections(message):
 
 @bot.message_handler(commands=['reading', 'writing', 'listening'])
 def show_section_words(message):
-    """Savol turi ichidagi so'zlarni ko'rsatish"""
+    """Savol turi ichidagi so'zlar"""
     uid = message.from_user.id
     
     if uid not in user_context or "viewing_topic" not in user_context[uid]:
@@ -347,18 +382,22 @@ def show_section_words(message):
         words = questions[q_key]
         if words:
             q_num = q_key.replace("-savol so'zlari", "")
-            msg += f"{q_num}-savol so'zlari\n"
+            msg += f"                 {q_num}-savol so'zlari\n"
             
             for kr, uz in words.items():
-                msg += f"   • {kr} → {uz}\n"
+                msg += f"                 • {kr} → {uz}\n"
             msg += "\n"
     
     bot.send_message(message.chat.id, msg)
 
 @bot.message_handler(content_types=['text'])
 def handle_all(message):
+    """Barcha xabarlarni qayta ishlash"""
     text = message.text.strip()
-    if text.startswith("/"): return
+    
+    # /start yoki /status yoki /Topik... kabi komandalar uchun qaytish
+    if text.startswith("/"):
+        return
     
     uid = message.from_user.id
     data = load_data()
@@ -370,12 +409,18 @@ def handle_all(message):
 
     # 1. TOPIK TANLASH/YARATISH (>35 yoki >35. tezkor kirish)
     if text.startswith(">"):
-        # >35. tezkor kirish formatini tekshirish
         is_quick_access = text.endswith(".")
-        topic_num = text[1:].strip().rstrip(".")
+        topic_num_str = text[1:].strip().rstrip(".")
+        
+        # Raqamga aylantirish (>05 -> 5)
+        try:
+            topic_num = int(topic_num_str)
+        except:
+            return bot.send_message(message.chat.id, "❌ Noto'g'ri topik raqami")
+        
         topic_name = f"Topik-{topic_num}"
         
-        # Tezkor kirish - topikni ko'rsatish
+        # Tezkor kirish
         if is_quick_access:
             if topic_name not in data:
                 return bot.send_message(
@@ -399,7 +444,6 @@ def handle_all(message):
             
             msg += f"\n💡 Savol turini tanlash uchun bosing"
             
-            # Context saqlash
             if uid not in user_context:
                 user_context[uid] = {}
             user_context[uid]["viewing_topic"] = topic_name
@@ -414,7 +458,6 @@ def handle_all(message):
             data[topic_name] = {}
             save_data(data)
         
-        # Context yangilash
         if uid not in user_context:
             user_context[uid] = {}
         user_context[uid]["topic"] = topic_name
@@ -437,7 +480,7 @@ def handle_all(message):
             )
         return
 
-    # 2. SAVOL TURI TANLASH/YARATISH (?reading)
+    # 2. SAVOL TURI TANLASH (?reading)
     if text.startswith("?"):
         if uid not in user_context or not user_context[uid].get("topic"):
             return bot.send_message(
@@ -449,14 +492,12 @@ def handle_all(message):
         topic_key = user_context[uid]["topic"]
         topic_num = topic_key.replace("Topik-", "")
         
-        # Mavjudligini tekshirish
         is_new = section_name not in data[topic_key]
         
         if is_new:
             data[topic_key][section_name] = {}
             save_data(data)
         
-        # Context yangilash
         user_context[uid]["section"] = section_name
         user_context[uid]["question"] = None
         
@@ -464,34 +505,31 @@ def handle_all(message):
             message.chat.id,
             f"✅ {topic_num}-topik bo'limiga {section_name} savol turi belgilandi\n\n"
             f"Endi savol tartib raqamini kiriting:\n"
-            f".1 yoki .2 yoki .3 ..."
+            f"1. yoki 2. yoki 3. ..."
         )
-# 3. SAVOL RAQAMI TANLASH/YARATISH (1.)
-    # text.endswith(".") - oxiri nuqta bilan tugashini tekshiradi
-    # text[:-1].isdigit() - nuqtadan oldingi hamma narsa raqam ekanini tekshiradi
-    if text.endswith(".") and text[:-1].strip().isdigit():
+        return
+
+    # 3. SAVOL RAQAMI (1. yoki 2. yoki 3.)
+    if re.match(r'^\d+\.$', text):
         if uid not in user_context or not user_context[uid].get("section"):
             return bot.send_message(
                 message.chat.id,
                 "⚠️ Avval savol turini tanlang\n\nMisol: ?reading"
             )
         
-        # text[:-1] - oxiridagi nuqtani tashlab yuborib, faqat raqamni oladi
-        q_num = text[:-1].strip()
+        q_num = text.rstrip(".")
         q_name = f"{q_num}-savol so'zlari"
         
         topic_key = user_context[uid]["topic"]
         section_key = user_context[uid]["section"]
         topic_num = topic_key.replace("Topik-", "")
         
-        # Mavjudligini tekshirish
         is_new = q_name not in data[topic_key][section_key]
         
         if is_new:
             data[topic_key][section_key][q_name] = {}
             save_data(data)
         
-        # Context yangilash
         user_context[uid]["question"] = q_name
         
         bot.send_message(
@@ -499,13 +537,14 @@ def handle_all(message):
             f"✅ {topic_num}-topik > {section_key} > {q_num}-savol so'zlarini kiriting"
         )
         return
+
     # 4. O'CHIRISH (rm.apple yoki rm.35)
     if text.lower().startswith("rm."):
         target = text[3:].strip()
         
-        # Agar raqam bo'lsa - topikni o'chirish
+        # Topikni o'chirish
         if target.isdigit():
-            topic_key = f"Topik-{target}"
+            topic_key = f"Topik-{int(target)}"
             if topic_key in data:
                 del data[topic_key]
                 save_data(data)
@@ -514,7 +553,7 @@ def handle_all(message):
                 bot.send_message(message.chat.id, f"❌ {target}-topik topilmadi")
             return
         
-        # Aks holda - so'zni o'chirish
+        # So'zni o'chirish
         word_to_rm = target.lower()
         found = False
         
@@ -561,40 +600,38 @@ def handle_all(message):
         return
 
     # 6. O'ZGARTIRISH (word.new_word)
-    if "." in text and not text.startswith("."):
-        old_w, new_w = [i.strip() for i in text.split(".", 1)]
-        found = False
-        
-        for t in data:
-            for s in data[t]:
-                for q in data[t][s]:
-                    if old_w in data[t][s][q]:
-                        data[t][s][q][old_w] = new_w
-                        found = True
-                    else:
-                        for kr, uz in list(data[t][s][q].items()):
-                            if uz == old_w:
-                                data[t][s][q].pop(kr)
-                                data[t][s][q][new_w] = uz
-                                found = True
-        
-        if found:
-            save_data(data)
-            bot.send_message(message.chat.id, "✅ Yangilandi")
-        else: 
-            bot.send_message(message.chat.id, "❌ Topilmadi")
-        return
+    if "." in text and not text.endswith(".") and not text.startswith("."):
+        parts = text.split(".", 1)
+        if len(parts) == 2:
+            old_w, new_w = [i.strip() for i in parts]
+            found = False
+            
+            for t in data:
+                for s in data[t]:
+                    for q in data[t][s]:
+                        if old_w in data[t][s][q]:
+                            data[t][s][q][old_w] = new_w
+                            found = True
+                        else:
+                            for kr, uz in list(data[t][s][q].items()):
+                                if uz == old_w:
+                                    data[t][s][q].pop(kr)
+                                    data[t][s][q][new_w] = uz
+                                    found = True
+            
+            if found:
+                save_data(data)
+                bot.send_message(message.chat.id, "✅ Yangilandi")
+            else: 
+                bot.send_message(message.chat.id, "❌ Topilmadi")
+            return
 
     # 7. SO'Z QO'SHISH
-    # Faqat 3tasi ham tayinlangan bo'lsa so'z qabul qilish
     if uid in user_context and user_context[uid].get("topic") and user_context[uid].get("section") and user_context[uid].get("question"):
         lines = text.split("\n")
         t_k = user_context[uid]["topic"]
         s_k = user_context[uid]["section"]
         q_k = user_context[uid]["question"]
-        
-        topic_num = t_k.replace("Topik-", "")
-        q_num = q_k.replace("-savol so'zlari", "")
         
         added = 0
         for line in lines:
@@ -610,31 +647,23 @@ def handle_all(message):
         
         if added > 0:
             save_data(data)
-            bot.send_message(
-                message.chat.id,
-                f"✅ {added} ta so'z saqlandi"
-            )
-        # Agar hech narsa qo'shilmasa (format xato), indamay o'tib ketish
+            bot.send_message(message.chat.id, f"✅ {added} ta so'z saqlandi")
     else:
-        # Hozirgi holatni ko'rsatish
         current = get_location_text(uid)
-        missing = []
+        msg = f"{current}\n\n"
         
         if uid not in user_context or not user_context[uid].get("topic"):
-            missing.append(">35 (topik)")
+            msg += "❌ Siz topik kiritmadingiz\n"
         if uid not in user_context or not user_context[uid].get("section"):
-            missing.append("?reading (savol turi)")
+            msg += "❌ Siz savol turini kiritmadingiz\n"
         if uid not in user_context or not user_context[uid].get("question"):
-            missing.append(".1 (savol raqami)")
-        
-        msg = f"{current}\n\n⚠️ Yetishmayapti:\n"
-        for m in missing:
-            msg += f"  • {m}\n"
+            msg += "❌ Siz savol raqamini kiritmadingiz\n"
         
         bot.send_message(message.chat.id, msg)
 
 # --- MONITORING ---
 def auto_monitor():
+    """Avtomatik monitoring"""
     while True:
         try:
             bat = get_battery()
@@ -652,7 +681,7 @@ def auto_monitor():
 
 threading.Thread(target=auto_monitor, daemon=True).start()
 
-# --- RUN ---
+# --- ISHGA TUSHIRISH ---
 if __name__ == "__main__":
     try:
         me = bot.get_me()
