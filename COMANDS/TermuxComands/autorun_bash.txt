@@ -1,0 +1,108 @@
+men planshetni mini server qilib ishlatayapman uni boshqarish uchun sshd dan foydalanaman android planshetda termux bor me esa telfoni orqali termius bilan unga ulanayapman muammo termux 24 soat sihlab turmayapti sshd buyrugi uzilib qolyapti natijada planshet oldimda emas va masofadan ulana olmayapman windows larga o'xshab avtorun scriptmi apk mi qilib qo'ysa bo'lmaydimi planshet yoniq tursa bo'ldi men termius dan termuxga kira olishim kerakBro, muammoni tushundim! Android planshetingda Termux orqali SSH server (sshd) ni 24/7 ishlatish va masofadan (Termius orqali) ulanish uchun, Androidning batareya optimizatsiyasi va fon jarayonlari cheklovlari sababli maxsus sozlamalar kerak. Asosiy yechim: Termux:Boot addonidan foydalanish (planshet qayta ishga tushganda avtomatik ravishda sshd ni ishga tushiradi) va termux-wake-lock bilan CPU ni uyqudan saqlash.
+Mana batafsil qadamlar (hammasini Termux ichida bajaring, agar hali o'rnatilmagan bo'lsa):
+1. Termux va zarur paketlarni o'rnating
+
+Planshetingda Termux ni F-Droid yoki rasmiy GitHubdan yuklab oling (Google Play versiyasi cheklangan).
+Termuxni oching va quyidagi buyruqlarni bajaring:textpkg update
+pkg upgrade
+pkg install openssh
+SSH serverni sinab ko'ring: sshd (keyin whoami bilan username ni bilib oling, odatda "u0_aXXX").
+Parol o'rnating (agar hali bo'lmasa): passwd va yangi parolni kiriting.
+
+2. Batareya optimizatsiyasini o'chirib qo'ying
+
+Android sozlamalarida (Settings > Apps > Termux > Battery) "Battery optimization" ni o'chiring (Allow background activity).
+Agar Termux:Boot o'rnatilsa, uni ham shu tarzda optimizatsiyadan chiqaring.
+Bu Termux ni fonida o'chirilmasdan ishlashiga yordam beradi.
+
+3. Termux:Boot ni o'rnating (avtorun uchun asosiy yechim)
+
+Termux:Boot APK ni F-Droiddan yoki Termux GitHubdan yuklab oling (rasmiy: https://github.com/termux/termux-boot/releases).
+O'rnatgandan keyin, Termux:Boot ni bir marta oching (u Termux ni ishga tushiradi va sozlamalarni tayyorlaydi).
+
+4. Avtorun script yaratish
+
+Termux ichida quyidagi buyruqlar bilan script yarating:textmkdir -p ~/.termux/boot/
+nano ~/.termux/boot/start-sshd.sh
+Nano editorida quyidagi kodni yopishtiring (yoki vi/vim bilan tahrirlang):text#!/data/data/com.termux/files/usr/bin/sh
+termux-wake-lock
+sshd
+Bu script: CPU ni uyqudan saqlaydi (wake-lock) va sshd ni ishga tushiradi.
+
+Scriptni ishga yaroqli qiling:textchmod +x ~/.termux/boot/start-sshd.sh
+
+5. Sinab ko'ring
+
+Planshetni qayta ishga tushiring (reboot).
+Termux:Boot avtomatik ravishda scriptni ishga tushiradi → sshd fonida ishlaydi.
+Telefoningdan Termius orqali ulaning: Host – plansheting IP manzili (Termuxda ifconfig bilan toping), Port – 8022 (Termux ssh default), Username – Termux usernamingiz, Parol – siz o'rnatgan.
+Agar planshet uyqu rejimida bo'lsa ham (ekran o'chsa), wake-lock tufayli ulana olasiz. Lekin batareya tezroq tugashi mumkin – agar kerak bo'lmasa, scriptdan termux-wake-lock ni olib tashlang.
+
+Qo'shimcha maslahatlar:
+
+IP manzili o'zgarishi: Agar planshet Wi-Fi da bo'lsa, IP dinamik bo'lishi mumkin. Zerotier yoki Cloudflare Tunnel (search resultsda bor) orqali statik ulanish yarating.
+Muammolar: Agar hali ham uzilib qolsa, Termux ichida termux-services ni o'rnating (pkg install termux-services) va sv-enable sshd bilan xizmatni boshqaring.
+Xavfsizlik: SSH ni faqat ishonchli tarmoqda ishlating, yoki public key authentication qo'shing (ssh-keygen bilan).
+Agar APK shaklida xohlasangiz, Termux:Boot shu – u avtomatik ishlaydi. Boshqa APKlar (masalan, Tasker + Termux:Tasker) bilan ham integratsiya qilish mumkin, lekin Termux:Boot eng sodda.
+
+Agar biror qadam ishlamasa yoki batafsilroq kerak bo'lsa (masalan, screenshotlar), ayt – yordam beraman! 😎
+
+============================================
+ALIAS QO'SHISH COMANDALARNI QISQATIRISH VA AVTOMATLASHTIRISH
+
+Bro, endi ikkita turli bot/projecting bor ekan:
+
+DictionaryBot → mpl/MY_PROJECTS/TelegramBots/DictinoryBot
+KaliCMD → mpl/MY_PROJECTS/TelegramBots/KaliCMD
+
+Har biri uchun alohida venv va main.py bor deb taxmin qilyapman. Endi telefoningdan Termius orqali faqat bitta qisqa buyruq yozib, istagan botni ishga tushirish yoki to‘xtatish uchun super qulay aliaslar yasaymiz.
+1. Bir marta bajariladigan sozlash (Termuxda)
+Termius orqali planshetingga ulanib, quyidagi buyruqni bajaring:
+Bashnano ~/.bashrc
+Fayl oxiriga quyidagi kodni to‘liq yopishtiring (copy-paste qiling):
+Bash# Telegram Bots shortcuts (MY_PROJECTS)
+
+# Dictionary Bot
+alias dictstart='cd ~/mpl/MY_PROJECTS/TelegramBots/DictinoryBot && tmux new-session -d -s dictbot "source venv/bin/activate && python main.py" && echo "✅ DictionaryBot ishga tushdi (session: dictbot)"'
+alias dictstop='tmux kill-session -t dictbot 2>/dev/null && echo "🛑 DictionaryBot to‘xtatildi" || echo "🔴 DictionaryBot allaqachon to‘xtagan"'
+alias dictlog='tmux attach -t dictbot'
+alias dictstatus='tmux has-session -t dictbot 2>/dev/null && echo "🟢 DictionaryBot ishlayapti" || echo "🔴 DictionaryBot to‘xtagan"'
+
+# KaliCMD Bot
+alias kalistart='cd ~/mpl/MY_PROJECTS/TelegramBots/KaliCMD && tmux new-session -d -s kalibot "source venv/bin/activate && python main.py" && echo "✅ KaliCMD bot ishga tushdi (session: kalibot)"'
+alias kalistop='tmux kill-session -t kalibot 2>/dev/null && echo "🛑 KaliCMD bot to‘xtatildi" || echo "🔴 KaliCMD allaqachon to‘xtagan"'
+alias kalilog='tmux attach -t kalibot'
+alias kalistatus='tmux has-session -t kalibot 2>/dev/null && echo "🟢 KaliCMD ishlayapti" || echo "🔴 KaliCMD to‘xtagan"'
+Saqlash: Ctrl+O → Enter → Ctrl+X
+Keyin yangi aliaslarni yuklash:
+Bashsource ~/.bashrc
+2. Endi telefoningdan Termiusda faqat shu buyruqlar yetarli!
+DictionaryBot uchun:
+Bashdictstart    # → bot fon rejimida ishlay boshlaydi
+dictstop     # → botni to‘xtatadi
+dictlog      # → loglarni jonli ko‘rish (Ctrl+B → D bilan chiqish)
+dictstatus   # → holatini tekshirish
+KaliCMD uchun:
+Bashkalistart    # → bot fon rejimida ishlay boshlaydi
+kalistop     # → botni to‘xtatadi
+kalilog      # → loglarni jonli ko‘rish
+kalistatus   # → holatini tekshirish
+Misol jarayon (telefoningdan):
+Termius ochib yozasan:
+Bashdictstart
+→ "✅ DictionaryBot ishga tushdi" chiqadi, sen darrov boshqa ish qilasan.
+Keyinroq tekshirmoqchi bo‘lsang:
+Bashdictstatus
+Loglarni ko‘rmoqchi bo‘lsang:
+Bashdictlog
+(Ichkarida Ctrl+B tugmasini bosib, keyin D bosasan – detach, ya’ni chiqib ketasan)
+To‘xtatmoqchi bo‘lsang:
+Bashdictstop
+Xuddi shunday KaliCMD uchun ham kali bilan boshlanadigan buyruqlar.
+Bonus: Ikkalasi bir vaqtda ishlasin desang
+Hech muammo yo‘q – ikkalasini ham ishga tushiraverasan:
+Bashdictstart
+kalistart
+Ikkalasi alohida tmux sessionlarda tinch ishlayveradi.
+Endi hammasi qo‘lingda – bitta so‘z bilan botni yoqasan yoki o‘chirasan! 🔥
+Sinab ko‘r, agar pathda xato bo‘lsa yoki boshqa bot qo‘shmoqchi bo‘lsang – darrov ayt, yangilab beraman! 🚀

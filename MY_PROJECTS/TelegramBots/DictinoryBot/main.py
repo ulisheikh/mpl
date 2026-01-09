@@ -382,10 +382,10 @@ def show_section_words(message):
         words = questions[q_key]
         if words:
             q_num = q_key.replace("-savol so'zlari", "")
-            msg += f"                 {q_num}-savol so'zlari\n"
+            msg += f"{q_num}-savol so'zlari\n"
             
             for kr, uz in words.items():
-                msg += f"                 • {kr} → {uz}\n"
+                msg += f"   • {kr} - {uz}\n"
             msg += "\n"
     
     bot.send_message(message.chat.id, msg)

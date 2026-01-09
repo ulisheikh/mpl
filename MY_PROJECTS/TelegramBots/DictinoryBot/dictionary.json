@@ -1,71 +1,68 @@
 {
     "Topik-35": {
         "reading": {
-            "1-savol so'zlari": {
-                "안녕": "Salom"
+            "9-savol so'zlari": {
+                "박람회": "ko'rgazma,yarmarka"
             },
-            "2-savol so'zlari": {
-                "허니": "asal"
+            "13-savol so'zlari": {
+                "소재로gotj": "material sifatida"
             },
-            "3-savol so'zlari": {
-                "누누누": "Dnnd"
-            }
-        }
-    },
-    "Topik-36": {
-        "writing": {
-            "1-savol so'zlari": {
-                "씨발": "Poxxuy",
-                "안녕": "Salom"
-            }
-        }
-    },
-    "Topik-34": {},
-    "Topik-33": {},
-    "Topik-00": {
-        "writing": {
-            "1-savol so'zlari": {}
-        }
-    },
-    "Topik-01": {},
-    "Topik-02": {
-        "test": {},
-        "fil": {},
-        "ot": {
-            "1-savol so'zlari": {
-                "otni 민드": "olim"
-            }
-        }
-    },
-    "Topik-03": {
-        "til": {
-            "1-savol so'zlari": {
-                "뱌ㅛㅡㅁㅅ": "kalit"
-            }
-        }
-    },
-    "Topik-04": {
-        "ㅏㅑㅅ\\": {
-            "1-savol so'zlari": {
-                "아누리": "kla"
-            }
-        }
-    },
-    "Topik-05": {
-        "reading": {
-            "1-savol so'zlari": {
-                "남": "ldkl"
-            }
-        }
-    },
-    "Topik-06": {},
-    "Topik-07": {
-        "ilm": {}
-    },
-    "Topik-8": {
-        "reading": {
-            "1-savol so'zlari": {
-                "셯": "salom"
+            "15-savol so'zlari": {
+                "등장했다": "paydo bo'ldi",
+                "운행": "qatnov",
+                "예산": "byudjet , ajratilgan mablag'",
+                "부담한다": "zimmasiga olmoq, ma'sul"
+            },
+            "16-savol so'zlari": {
+                "얽힌": "bilan bog'liq, chigallashgan,qamrab olgan",
+                "기혼": "turmush qurgan",
+                "가사": "uy ishlari",
+                "육아": "bola parvarishi",
+                "여전히": "hanuz,avvalgidek",
+                "승진하다": "lavozimi oshmoq"
+            },
+            "17-savol so'zlari": {
+                "환하다": "yorqin",
+                "둥근": "dumaloq"
+            },
+            "18-savol so'zlari": {
+                "휫수": "marta,takrorlanish soni",
+                "측정한다": "o'lchaydi,aniqlaydi",
+                "늘리다": "uzaytirmoq,ko'paytirmoq"
+            },
+            "19-savol so'zlari": {
+                "익히다": "pishirmoq",
+                "화학": "kimyo (kimyoviy)",
+                "물질": "modda",
+                "겉": "sirti,tashqi qismi,po'sti",
+                "대개": "asosan,odatda",
+                "숙성된": "pishgan,yetishtirilgan",
+                "껍질": "po'st qismi",
+                "지속적으로": "doimiy",
+                "또한": "shuningdek,yana",
+                "인공": "sun'iy"
+            },
+            "21-savol so'zlari": {
+                "수집하다": "yig'moq,to'plamoq",
+                "골치만/아프고": "faqat boshi og'rib,tashvishli bo'lib (ibora)",
+                "콧대만/높아지고": "kibrga berilish,burni ko'tarilish (ibora)",
+                "눈치만/빨라지고": "sezgir bo'lib ketish, vaziyatni tez ilg'ab olish (ibora)",
+                "비행기만/태우고": "paxta qo'yish (ibora)"
+            },
+            "22-savol so'zlari": {
+                "요인": "omil",
+                "폭이": "kengligi",
+                "풍부한": "ko'p,mo'l,serob"
+            },
+            "23-savol so'zlari": {
+                "운영하는": "boshqaradigan,yuritadigan",
+                "사정이": "holat,sharoit,vaziyat",
+                "한참을": "uzoq vaqt,ancha vaqt davomida",
+                "눈을/지그시/감고": "ko'zini ohista -sekin yummoq",
+                "내밀면서": "tutqazib ,oldinga surib",
+                "마치": "go'yo,huddi",
+                "천하를/얻다": "butun dunyoni qo'lga kiritgandek,ulkan g'alabaga erishgandek",
+                "일부를/걷어": "bir qismini yig'ib"
             }
         }
     }
