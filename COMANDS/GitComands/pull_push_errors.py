@@ -1,129 +1,162 @@
-# git_scenario_demo.py
-# Git conflict holatini TERMINAL uslubida tushuntiruvchi DEMO
-# Hech qanday real git ishlamaydi – faqat ko‘rsatish uchun
-
-import time
-import sys
-
-def slow_print(text, delay=0.005):
-    for c in text:
-        sys.stdout.write(c)
-        sys.stdout.flush()
-        time.sleep(delay)
-    print()
-
-def header(title):
-    print("\n" + "=" * 70)
-    print(f"### {title}")
-    print("=" * 70)
-
-def show_file(title, content):
-    print(f"\n--- mevalar.txt ({title}) ---")
-    print(content)
-    print("-" * 30)
-
-# BOSHLANG‘ICH HOLAT
-github_file = """olma
-olcha
-qovun
-nok
+"""
+GIT CHEAT SHEET
+Holatlar:
+1) SAYT HAQIQAT (GitHub ustun)
+2) LOCAL HAQIQAT (kompyuter ustun)
+3) IKKALASI HAM MUHIM (conflict bilan)
 """
 
-local_file = """olma
-olcha
-qovun
-tarvuz
+# ===============================
+# 1️⃣ SAYT HAQIQAT (LOCALNI TASHLAYSAN)
+# ===============================
+
+"""
+Bu holat qachon?
+- GitHub'dagi kod to‘g‘ri
+- Local buzilgan
+- Local o‘zgarishlar kerak emas
 """
 
-header("BOSHLANG‘ICH HOLAT")
+"""
+$ git fetch origin
+# GitHub'dagi eng oxirgi holatni olib keladi (lekin qo‘llamaydi)
 
-slow_print("$ git status")
-slow_print("On branch main")
-slow_print("Your branch and 'origin/main' have diverged\n")
+$ git reset --hard origin/main
+# LOCALNI TO‘LIQ O‘CHIRIB
+# GitHub holatiga 1:1 qilib qo‘yadi
 
-show_file("GitHub (sayt)", github_file)
-show_file("Local kompyuter", local_file)
+⚠️ OG'OHLANTIRISH:
+Localdagi HAMMA o‘zgarish YO‘QOLADI
+"""
 
-# =========================
-# VARIANT A — LOCAL USTUN
-# =========================
-header("VARIANT A — LOCAL USTUN (git push --force)")
+# ===============================
+# 2️⃣ LOCAL HAQIQAT (SAYTNI BOSIB KETASAN)
+# ===============================
 
-slow_print("$ git add mevalar.txt")
-slow_print("$ git commit -m \"tarvuz qo‘shildi\"")
-slow_print("[main abc123] tarvuz qo‘shildi\n")
+"""
+Bu holat qachon?
+- Local kod to‘g‘ri
+- GitHub'dagi kod xato
+- Localni majburan yuklamoqchisan
+"""
 
-slow_print("$ git push origin main")
-slow_print("! [rejected] main -> main (fetch first)")
-slow_print("error: failed to push some refs\n")
+"""
+$ git add .
+# Barcha fayllarni qo‘shadi
 
-slow_print("$ git push origin main --force")
-slow_print("Enumerating objects: 5, done.")
-slow_print("To github.com:user/repo.git")
-slow_print(" + nok -> tarvuz (forced update)\n")
+$ git commit -m "local is truth"
+# Local o‘zgarishni saqlaydi
 
-show_file("YAKUNIY HOLAT (GitHub va Local)", local_file)
+$ git push --force origin main
+# GitHub'dagi kodni MAJBURAN almashtiradi
 
-# =========================
-# VARIANT B — SAYT USTUN
-# =========================
-header("VARIANT B — SAYT USTUN (local o‘zgarish tashlanadi)")
+⚠️ OG'OHLANTIRISH:
+GitHub'dagi eski commitlar YO‘QOLADI
+"""
 
-slow_print("$ git restore mevalar.txt")
-slow_print("Local o‘zgarishlar bekor qilindi\n")
+# ===============================
+# 3️⃣ IKKALASI HAM MUHIM (CONFLICT)
+# ===============================
 
-slow_print("$ git pull origin main")
-slow_print("Updating abc123..def456")
-slow_print("Fast-forward\n")
+"""
+Bu holat qachon?
+- GitHub'da ham o‘zgarish bor
+- Localda ham o‘zgarish bor
+- IKKALASI HAM KERAK
+"""
 
-show_file("YAKUNIY HOLAT (GitHub va Local)", github_file)
+"""
+$ git pull origin main
+# GitHub + Localni birlashtirmoqchi bo‘ladi
+# Agar bir xil joy o‘zgargan bo‘lsa → CONFLICT chiqadi
+"""
 
-# =========================
-# VARIANT C — IKKALASI SAQLANADI
-# =========================
-header("VARIANT C — IKKALASI SAQLANADI (stash + merge)")
+"""
+CONFLICT chiqqanda fayl ichi shunday bo‘ladi:
 
-slow_print("$ git stash")
-slow_print("Saved working directory and index state\n")
-
-slow_print("$ git pull origin main")
-slow_print("Updating abc123..def456\n")
-
-slow_print("$ git stash pop")
-slow_print("CONFLICT (content): Merge conflict in mevalar.txt\n")
-
-conflict_file = """olma
-olcha
-qovun
 <<<<<<< HEAD
-nok
+olma
+o‘rik
 =======
-tarvuz
->>>>>>> stash
-"""
-
-show_file("CONFLICT HOLATI", conflict_file)
-
-merged_file = """olma
+olma
 olcha
-qovun
-nok
-tarvuz
+>>>>>>> origin/main
 """
 
-slow_print("# conflict qo‘lda to‘g‘irlandi")
+"""
+NIMA QILASAN?
+- <<<<<<< HEAD  → LOCAL qismi
+- =======       → ajratuvchi
+- >>>>>>>       → GITHUB qismi
 
-show_file("TO‘G‘IRLANGAN FAYL", merged_file)
+KERAKLISINI QOLDIRASAN
+KERAKSIZINI O‘CHIRASAN
+BELGILARNI HAM O‘CHIRASAN
+"""
 
-slow_print("$ git add mevalar.txt")
-slow_print("$ git commit -m \"nok va tarvuz birlashtirildi\"")
-slow_print("[main fed999] nok va tarvuz birlashtirildi\n")
+"""
+MASALAN IKKALASI HAM KERAK BO‘LSA:
 
-slow_print("$ git push origin main")
-slow_print("To github.com:user/repo.git")
-slow_print("   def456..fed999  main -> main\n")
+olma
+o‘rik
+olcha
+"""
 
-show_file("YAKUNIY HOLAT (GitHub va Local)", merged_file)
+"""
+KEYIN:
 
-print("\n✅ DEMO TUGADI")
-print("Qaysi variant qachon ishlatilishini endi aniq ko‘rding 👍")
+$ git add fruits.txt
+# Conflict hal bo‘lganini aytasan
+
+$ git commit -m "resolve conflict fruits.txt"
+# Kelishuvni saqlaysan
+
+$ git push
+# GitHub'ga yuborasan
+"""
+
+# ===============================
+# 4️⃣ VAQTINCHA SAQLAB TURISH (STASH)
+# ===============================
+
+"""
+Bu holat qachon?
+- Localda yarim ish bor
+- Pull qilish kerak
+- Hozir commit qilging kelmaydi
+"""
+
+"""
+$ git stash
+# Local o‘zgarishni yashirib turadi
+
+$ git pull
+# GitHub kodini olasan
+
+$ git stash pop
+# Yashirilgan o‘zgarishni qaytaradi
+"""
+
+# ===============================
+# 5️⃣ TEZ TEKSHIRUV KOMANDALARI
+# ===============================
+
+"""
+$ git status
+# Hozirgi holat
+
+$ git log --oneline --graph --all
+# Kim qachon nima qilganini ko‘rish
+
+$ git diff
+# O‘zgarishlarni ko‘rish
+"""
+
+# ===============================
+# ASL SABOQ
+# ===============================
+
+"""
+❌ BOT ICHIDAN git pull + restart XAVFLI
+✅ Avval terminalda tekshir, keyin botga qo‘sh
+"""

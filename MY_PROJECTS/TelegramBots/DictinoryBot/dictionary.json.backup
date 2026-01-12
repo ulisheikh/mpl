@@ -88,7 +88,10 @@
                 "웹/소설": "online roman",
                 "짧은/분량": "qisqa hajmli"
             },
-            "30-savol so'zlari": {}
+            "30-savol so'zlari": {
+                "궁중": "saroy ichida"
+            }
         }
+        
     }
 }
