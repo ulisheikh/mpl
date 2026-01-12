@@ -63,6 +63,33 @@
                 "마치": "go'yo,huddi",
                 "천하를/얻다": "butun dunyoni qo'lga kiritgandek,ulkan g'alabaga erishgandek",
                 "일부를/걷어": "bir qismini yig'ib"
+            },
+            "25-savol so'zlari": {
+                "해가/되다": "salbiy ta'siri bo'lmoq",
+                "독특한": "o'ziga hos,noodatiy",
+                "통일하다": "yagona, birlashtirmoq",
+                "제자리걸음": "oldinga siljimaslik,joyida qolish",
+                "요구되다": "talab qilinmoq",
+                "현실적인/대책": "amaliy-real chora tadbirlar",
+                "요구되다/talab": "qilinmoq"
+            },
+            "28-savol so'zlari": {
+                "구속": "qamoq",
+                "반발심": "norozilik hissi",
+                "방과": "darsdan keyin",
+                "관여하다": "aralashtirmoq,qatnashtirmoq"
+            },
+            "29-savol so'zlari": {
+                "피로하다": "charchamiq,toliqmoq",
+                "간격": "masofa,oraliq",
+                "편집되어/있다": "montaj qilingan,tahrirlangan",
+                "등장인물": "qahramon,personaj",
+                "각색해서": "moslab qayta ishlangan",
+                "웹/소설": "online roman",
+                "짧은/분량": "qisqa hajmli"
+            },
+            "30-savol so'zlari": {
+                "궁중": "saroy ichida"
             }
         }
     }
