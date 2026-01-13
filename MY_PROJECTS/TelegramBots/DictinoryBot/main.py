@@ -18,7 +18,6 @@ import time
 from datetime import datetime
 from html import escape
 
-
 # ============================================
 # KONFIGURATSIYA
 # ============================================
@@ -26,7 +25,6 @@ TOKEN = os.getenv("BOT_TOKEN", "8046756811:AAEsMXNBMkIMkqM3XtVyQ3OzOd4itRfn03M")
 DATA_FILE = "dictionary.json"
 START_TIME = datetime.now()
 ADMIN_ID = 8046330769
-parse_mode = "HTML"
 
 bot = telebot.TeleBot(TOKEN)
 user_context = {}
@@ -213,7 +211,14 @@ def get_help_text():
         "   s.so'z\n\n"
         
         "9️⃣ TIZIM\n"
-        "   /status"
+        "   /status\n\n"
+        "<restore function>\n"
+            "rs.topik\n"
+            "rs.r,w,l\n"
+            "rs.word\n"
+
+        
+        
     )
 
 # ============================================
@@ -378,49 +383,45 @@ def show_topic_sections(message):
 
 @bot.message_handler(commands=['reading', 'writing', 'listening'])
 def show_section_words(message):
+    """Savol turi ichidagi so'zlar"""
     uid = message.from_user.id
-
+    
     if uid not in user_context or "viewing_topic" not in user_context[uid]:
         return bot.send_message(
             message.chat.id,
-            "⚠️ Avval topikni tanlang\n\nBO'LIMLAR tugmasini bosing"
+            "⚠️ Avval topikni tanlang\n\n"
+            "BO'LIMLAR tugmasini bosing"
         )
-
+    
     section_name = message.text[1:]
     topic_key = user_context[uid]["viewing_topic"]
     topic_num = topic_key.replace("Topik-", "")
+    
     data = load_data()
-
+    
     if section_name not in data[topic_key]:
-        return bot.send_message(message.chat.id, f"❌ {section_name} topilmadi")
-
-    msg = f"📌 {topic_num}-topik > {section_name.upper()}\n\n"
+        return bot.send_message(
+            message.chat.id, 
+            f"❌ {section_name} topilmadi"
+        )
+    
+    msg = f"📌 <b>{topic_num}-Topik > {section_name.upper()}</b>\n\n"
+    
     questions = data[topic_key][section_name]
-
-    for q_key in sorted(questions.keys()):
+    if not questions:
+        return bot.send_message(message.chat.id, f"❌ {section_name} bo'sh")
+    
+    for q_key in sorted(questions.keys(), key=lambda x: int(x.replace("-savol so'zlari", "")) if x.replace("-savol so'zlari", "").isdigit() else 0):
         words = questions[q_key]
-        if not words:
-            continue
-
-        q_num = q_key.replace("-savol so'zlari", "")
-        # msg += f"{q_num}-savol so'zlari\n"
-        msg += f"<b>{q_num}-savol so'zlari</b>\n"
-
-
-        for kr, uz in words.items():
-            # msg += f"   • <b>{escape(kr)}</b> - {escape(uz)}\n"
-            msg += f"   • {escape(kr)} — <i>{escape(uz)}</i>\n"
-
-
-        msg += "\n"
-
-        # 🔥 agar xabar katta bo‘lib ketsa — bo‘lib yuboramiz
-        if len(msg) > 3500:
-            bot.send_message(message.chat.id, msg, parse_mode="HTML")
-            msg = ""
-
-    if msg.strip():
-        bot.send_message(message.chat.id, msg, parse_mode="HTML")
+        if words:
+            q_num = q_key.replace("-savol so'zlari", "")
+            msg += f"<code>{q_num}-savol so'zlari</code>\n"
+            
+            for kr, uz in words.items():
+                msg += f"   <b>• {kr}</b> - <i>{uz}</i>\n"
+            msg += "\n"
+    
+    bot.send_message(message.chat.id, msg,parse_mode="HTML")
 
 # ============================================
 # ASOSIY HANDLER (BARCHA MATNLAR)
@@ -602,54 +603,121 @@ def handle_all(message):
         return
 
     # ============================================
-    # BACKUP'DAN TIKLASH (restore yoki backup)
+    # TIKLASH (rs.35, rs.35r, rs.so'z)
     # ============================================
-    if text.lower() in ['restore', 'backup', 'qayta/tiklash']:
-        backup_file = DATA_FILE + ".backup"
+    if text.lower().startswith("rs."):
+        target = text[3:].strip()
+        
+        # Topikni tiklash (rs.35)
+        if target.isdigit():
+            topic_num = int(target)
+            backup_file = f"backup_topik_{topic_num}.json"
+            
+            if not os.path.exists(backup_file):
+                return bot.send_message(
+                    message.chat.id,
+                    f"❌ {topic_num}-topik uchun backup topilmadi"
+                )
+            
+            try:
+                with open(backup_file, 'r', encoding='utf-8') as f:
+                    topic_data = json.load(f)
+                
+                topic_key = f"Topik-{topic_num}"
+                data[topic_key] = topic_data
+                save_data(data)
+                
+                os.remove(backup_file)
+                
+                bot.send_message(
+                    message.chat.id,
+                    f"✅ {topic_num}-topik tiklandi!"
+                )
+            except Exception as e:
+                bot.send_message(message.chat.id, f"❌ Xatolik: {e}")
+            return
+        
+        # Bo'limni tiklash (rs.35r)
+        if len(target) >= 2 and target[:-1].isdigit() and target[-1] in ['r', 'w', 'l']:
+            topic_num = int(target[:-1])
+            section_code = target[-1]
+            section_map = {'r': 'reading', 'w': 'writing', 'l': 'listening'}
+            section_name = section_map[section_code]
+            
+            backup_file = f"backup_{topic_num}_{section_name}.json"
+            
+            if not os.path.exists(backup_file):
+                return bot.send_message(
+                    message.chat.id,
+                    f"❌ {topic_num}-topik > {section_name} uchun backup topilmadi"
+                )
+            
+            try:
+                with open(backup_file, 'r', encoding='utf-8') as f:
+                    section_data = json.load(f)
+                
+                topic_key = f"Topik-{topic_num}"
+                if topic_key not in data:
+                    data[topic_key] = {}
+                
+                data[topic_key][section_name] = section_data
+                save_data(data)
+                
+                os.remove(backup_file)
+                
+                bot.send_message(
+                    message.chat.id,
+                    f"✅ {topic_num}-topik > {section_name} tiklandi!"
+                )
+            except Exception as e:
+                bot.send_message(message.chat.id, f"❌ Xatolik: {e}")
+            return
+        
+        # So'zni tiklash (rs.so'z)
+        word_to_restore = target
+        backup_file = f"backup_word_{word_to_restore}.json"
         
         if not os.path.exists(backup_file):
             return bot.send_message(
                 message.chat.id,
-                "❌ Backup fayl topilmadi\n\n"
-                "Backup faqat o'chirishdan oldin yaratiladi"
+                f"❌ '{word_to_restore}' uchun backup topilmadi"
             )
         
         try:
-            # Backup'dan tiklash
             with open(backup_file, 'r', encoding='utf-8') as f:
-                backup_data = json.load(f)
+                word_backup = json.load(f)
             
-            # Asosiy faylga yozish
-            with open(DATA_FILE, 'w', encoding='utf-8') as f:
-                json.dump(backup_data, f, ensure_ascii=False, indent=4)
+            # Asl joyiga qaytarish
+            topic_key = word_backup['topic']
+            section_key = word_backup['section']
+            question_key = word_backup['question']
+            korean = word_backup['korean']
+            uzbek = word_backup['uzbek']
+            
+            if topic_key not in data:
+                data[topic_key] = {}
+            if section_key not in data[topic_key]:
+                data[topic_key][section_key] = {}
+            if question_key not in data[topic_key][section_key]:
+                data[topic_key][section_key][question_key] = {}
+            
+            data[topic_key][section_key][question_key][korean] = uzbek
+            save_data(data)
+            
+            os.remove(backup_file)
             
             bot.send_message(
                 message.chat.id,
-                "✅ Lug'at oxirgi backup'dan tiklandi!\n\n"
-                "💡 Yangi o'zgarishlar bekor qilindi"
+                f"✅ So'z tiklandi: {korean} → {uzbek}"
             )
         except Exception as e:
-            bot.send_message(
-                message.chat.id,
-                f"❌ Tiklashda xatolik: {e}"
-            )
+            bot.send_message(message.chat.id, f"❌ Xatolik: {e}")
         return
 
     # ============================================
     # O'CHIRISH (rm.apple yoki rm.35 yoki rm.35r)
     # ============================================
     if text.lower().startswith("rm."):
-        # O'chirishdan oldin backup yaratish
-        try:
-            if os.path.exists(DATA_FILE):
-                backup_file = DATA_FILE + ".backup"
-                with open(DATA_FILE, 'r', encoding='utf-8') as f:
-                    backup_data = f.read()
-                with open(backup_file, 'w', encoding='utf-8') as f:
-                    f.write(backup_data)
-        except:
-            pass
-        
         target = text[3:].strip()
         
         # Bo'limni o'chirish (rm.35r, rm.35w, rm.35l)
@@ -662,11 +730,17 @@ def handle_all(message):
             section_name = section_map[section_code]
             
             if topic_key in data and section_name in data[topic_key]:
+                # Backup yaratish
+                backup_file = f"backup_{topic_num}_{section_name}.json"
+                with open(backup_file, 'w', encoding='utf-8') as f:
+                    json.dump(data[topic_key][section_name], f, ensure_ascii=False, indent=4)
+                
                 del data[topic_key][section_name]
                 save_data(data)
                 bot.send_message(
                     message.chat.id, 
-                    f"🗑 {topic_num}-topik > {section_name} o'chirildi"
+                    f"🗑 {topic_num}-topik > {section_name} o'chirildi\n\n"
+                    f"💡 Qaytarish: rs.{topic_num}{section_code}"
                 )
             else:
                 bot.send_message(
@@ -677,35 +751,88 @@ def handle_all(message):
         
         # Topikni o'chirish (rm.35)
         if target.isdigit():
-            topic_key = f"Topik-{int(target)}"
+            topic_num = int(target)
+            topic_key = f"Topik-{topic_num}"
+            
             if topic_key in data:
+                # Backup yaratish
+                backup_file = f"backup_topik_{topic_num}.json"
+                with open(backup_file, 'w', encoding='utf-8') as f:
+                    json.dump(data[topic_key], f, ensure_ascii=False, indent=4)
+                
                 del data[topic_key]
                 save_data(data)
-                bot.send_message(message.chat.id, f"🗑 {target}-topik o'chirildi")
+                bot.send_message(
+                    message.chat.id, 
+                    f"🗑 {topic_num}-topik o'chirildi\n\n"
+                    f"💡 Qaytarish: rs.{topic_num}"
+                )
             else:
-                bot.send_message(message.chat.id, f"❌ {target}-topik topilmadi")
+                bot.send_message(message.chat.id, f"❌ {topic_num}-topik topilmadi")
             return
         
         # So'zni o'chirish
         word_to_rm = target.lower()
         found = False
+        backup_info = None
         
         for t in data:
             for s in data[t]:
                 for q in data[t][s]:
+                    # Korean kalit bo'yicha qidirish
                     to_del = [k for k in data[t][s][q] if k.lower() == word_to_rm]
-                    for k in to_del: 
+                    for k in to_del:
+                        # Backup yaratish
+                        backup_info = {
+                            'topic': t,
+                            'section': s,
+                            'question': q,
+                            'korean': k,
+                            'uzbek': data[t][s][q][k]
+                        }
+                        backup_file = f"backup_word_{word_to_rm}.json"
+                        with open(backup_file, 'w', encoding='utf-8') as f:
+                            json.dump(backup_info, f, ensure_ascii=False, indent=4)
+                        
                         del data[t][s][q][k]
                         found = True
+                        break
                     
+                    if found:
+                        break
+                    
+                    # O'zbek qiymat bo'yicha qidirish
                     to_del_v = [k for k, v in data[t][s][q].items() if v.lower() == word_to_rm]
-                    for k in to_del_v: 
+                    for k in to_del_v:
+                        # Backup yaratish
+                        backup_info = {
+                            'topic': t,
+                            'section': s,
+                            'question': q,
+                            'korean': k,
+                            'uzbek': data[t][s][q][k]
+                        }
+                        backup_file = f"backup_word_{word_to_rm}.json"
+                        with open(backup_file, 'w', encoding='utf-8') as f:
+                            json.dump(backup_info, f, ensure_ascii=False, indent=4)
+                        
                         del data[t][s][q][k]
                         found = True
+                        break
+                
+                if found:
+                    break
+            
+            if found:
+                break
         
         if found:
             save_data(data)
-            bot.send_message(message.chat.id, f"🗑 O'chirildi: {word_to_rm}")
+            bot.send_message(
+                message.chat.id, 
+                f"🗑 O'chirildi: {word_to_rm}\n\n"
+                f"💡 Qaytarish: rs.{word_to_rm}"
+            )
         else: 
             bot.send_message(message.chat.id, "❌ Topilmadi")
         return
@@ -737,28 +864,65 @@ def handle_all(message):
     # ============================================
     # O'ZGARTIRISH (word.new_word)
     # ============================================
-    if "." in text and not text.endswith(".") and not text.startswith("."):
+    if "." in text and not text.endswith(".") and not text.startswith(".") and not text.startswith("rs.") and not text.startswith("rm.") and not text.startswith("s."):
         parts = text.split(".", 1)
         if len(parts) == 2:
             old_w, new_w = [i.strip() for i in parts]
             found = False
+            backup_info = None
             
             for t in data:
                 for s in data[t]:
                     for q in data[t][s]:
                         if old_w in data[t][s][q]:
+                            # Backup yaratish
+                            backup_info = {
+                                'topic': t,
+                                'section': s,
+                                'question': q,
+                                'korean': old_w,
+                                'uzbek': data[t][s][q][old_w]
+                            }
+                            backup_file = f"backup_word_{old_w}.json"
+                            with open(backup_file, 'w', encoding='utf-8') as f:
+                                json.dump(backup_info, f, ensure_ascii=False, indent=4)
+                            
                             data[t][s][q][old_w] = new_w
                             found = True
+                            break
                         else:
                             for kr, uz in list(data[t][s][q].items()):
                                 if uz == old_w:
+                                    # Backup yaratish
+                                    backup_info = {
+                                        'topic': t,
+                                        'section': s,
+                                        'question': q,
+                                        'korean': kr,
+                                        'uzbek': uz
+                                    }
+                                    backup_file = f"backup_word_{old_w}.json"
+                                    with open(backup_file, 'w', encoding='utf-8') as f:
+                                        json.dump(backup_info, f, ensure_ascii=False, indent=4)
+                                    
                                     data[t][s][q].pop(kr)
                                     data[t][s][q][new_w] = uz
                                     found = True
+                                    break
+                    
+                    if found:
+                        break
+                
+                if found:
+                    break
             
             if found:
                 save_data(data)
-                bot.send_message(message.chat.id, "✅ Yangilandi")
+                bot.send_message(
+                    message.chat.id, 
+                    f"✅ Yangilandi\n\n"
+                    f"💡 Qaytarish: rs.{old_w}"
+                )
             else: 
                 bot.send_message(message.chat.id, "❌ Topilmadi")
             return
@@ -836,7 +1000,7 @@ def handle_all(message):
                 f"✅ {topic_num}-topik > {section_key} > {q_num}-savol so'zlari saqlandi"
             )
         else:
-            bot.send_message(message.chat.id, "❌ Hech qanday so'z qo'shilmadi")
+            bot.send_message(message.chat.id,parsemode="HTML" "❌ Hech qanday so'z qo'shilmadi")
         
         return
 
