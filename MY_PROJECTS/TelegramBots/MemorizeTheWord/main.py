@@ -146,6 +146,26 @@ Sen bu so'zni bilasanmi? 🤔
         "word_stats_title": "📊 <b>So'zlar statistikasi (kam → ko'p)</b>\n",
         "word_stats_empty": "📊 <b>So'zlar statistikasi</b>\n\n⚠️ Hozircha ma'lumot yo'q.\nO'yinni boshlang.",
         "auto_game_finished": "🎉 <b>Avtomatik o'yin tugadi!</b>\n\n✅ To'g'ri: {correct}\n❌ Noto'g'ri: {wrong}\n\n15 daqiqadan keyin yana so'zlar yuboriladi! ⏰",
+    
+    "game_question": """
+🎮 <b>Savol:</b>
+
+🇺🇿 <b>{uzbek}</b>
+
+📍 <code>{topic} > {section} > {chapter}</code>
+📝 <b>Koreys tilida yozing:</b>
+""",
+        "auto_question": """
+⏰ <b>So'z yodlash vaqti!</b>
+📊 <b>Savol: {count}/10</b>
+
+<i>Sen bu so'zni bilasanmi?</i> 🤔
+
+🇺🇿 <b>{uzbek}</b>
+
+📍 <code>{topic} > {section} > {chapter}</code>
+📝 <b>Koreys tilida yozing:</b>
+""",
     },
     "kr": {
         "choose_language": "🌐 언어 선택:",
@@ -248,6 +268,26 @@ Sen bu so'zni bilasanmi? 🤔
         "word_stats_title": "📊 <b>단어 통계 (적음 → 많음)</b>\n",
         "word_stats_empty": "📊 <b>단어 통계</b>\n\n⚠️ 아직 데이터가 없습니다.\n게임을 시작하세요.",
         "auto_game_finished": "🎉 <b>자동 게임 완료!</b>\n\n✅ 정답: {correct}\n❌ 오답: {wrong}\n\n15분 후 다시 단어가 전송됩니다! ⏰",
+    
+    "game_question": """
+🎮 <b>질문:</b>
+
+🇺🇿 <b>{uzbek}</b>
+
+📍 <code>{topic} > {section} > {chapter}</code>
+📝 <b>한국어로 작성하세요:</b>
+""",
+        "auto_question": """
+⏰ <b>단어 학습 시간!</b>
+📊 <b>질문: {count}/10</b>
+
+<i>이 단어를 알고 있나요?</i> 🤔
+
+🇺🇿 <b>{uzbek}</b>
+
+📍 <code>{topic} > {section} > {chapter}</code>
+📝 <b>한국어로 작성하세요:</b>
+""",
     }
 }
 
@@ -838,7 +878,6 @@ async def admin_stats_handler(callback: CallbackQuery):
         ])
     )
     await callback.answer()
-
 # ==================== O'YIN TIZIMI ====================
 
 @router.message(Command("game"))
@@ -858,11 +897,18 @@ async def start_game_command(message: Message, state: FSMContext):
     
     await state.update_data(current_word=word, start_time=datetime.now().timestamp())
     
-    topic = word.get('category', 'Unknown')
-    section = word.get('sub_category', 'Unknown')
-    
+    # Ma'lumotlarni tayyorlash
+    raw_topic = word.get('topic', word.get('category', 'Umumiy'))
+    topic = f"{raw_topic.replace('Topik-', '')}-topik" if 'Topik-' in raw_topic else raw_topic
+    section = word.get('section', word.get('sub_category', 'Asosiy'))
+    chapter = word.get('chapter', '---')
+
     await message.answer(
-        get_text(lang, "game_question", uzbek=word['uzbek'], topic=topic, section=section),
+        get_text(lang, "game_question", 
+                 uzbek=word['uzbek'], 
+                 topic=topic, 
+                 section=section, 
+                 chapter=chapter),
         reply_markup=get_game_keyboard(lang),
         parse_mode="HTML"
     )
@@ -885,11 +931,18 @@ async def start_game_callback(callback: CallbackQuery, state: FSMContext):
     
     await state.update_data(current_word=word, start_time=datetime.now().timestamp())
     
-    topic = word.get('category', 'Unknown')
-    section = word.get('sub_category', 'Unknown')
-    
+    # Ma'lumotlarni tayyorlash
+    raw_topic = word.get('topic', word.get('category', 'Umumiy'))
+    topic = f"{raw_topic.replace('Topik-', '')}-topik" if 'Topik-' in raw_topic else raw_topic
+    section = word.get('section', word.get('sub_category', 'Asosiy'))
+    chapter = word.get('chapter', '---')
+
     await callback.message.edit_text(
-        get_text(lang, "game_question", uzbek=word['uzbek'], topic=topic, section=section),
+        get_text(lang, "game_question", 
+                 uzbek=word['uzbek'], 
+                 topic=topic, 
+                 section=section, 
+                 chapter=chapter),
         reply_markup=get_game_keyboard(lang),
         parse_mode="HTML"
     )
@@ -900,13 +953,37 @@ async def start_game_callback(callback: CallbackQuery, state: FSMContext):
 async def process_game_answer(message: Message, state: FSMContext):
     user_id = message.from_user.id
     lang = await user_db.get_language(user_id) or "uz"
+    
+    # 🛑 TO'XTATISH TUGMASINI TEKSHIRISH
+    if message.text == get_text(lang, "stop_game"):
+        stats = await user_db.get_statistics(user_id)
+        await state.clear() # FSM holatni o'chirish (MUHIM!)
+        
+        # O'yin to'xtagani haqida xabar
+        await message.answer(
+            get_text(lang, "game_stopped", correct=stats['correct'], wrong=stats['wrong']),
+            parse_mode="HTML"
+        )
+        # Asosiy menyu tugmalarini qaytarish
+        await message.answer(
+            get_text(lang, "main_menu"),
+            reply_markup=get_main_menu_keyboard(lang)
+        )
+        return # Qolgan kodni ishlatmaslik
+
+    # JAVOBNI TEKSHIRISH QISMI
     data = await state.get_data()
-    word = data['current_word']
+    word = data.get('current_word')
+    
+    if not word:
+        await state.clear()
+        return
     
     user_answer = message.text.strip().lower()
     correct_answer = word['korean'].strip().lower()
     
-    time_spent = int(datetime.now().timestamp() - data['start_time'])
+    start_time = data.get('start_time', datetime.now().timestamp())
+    time_spent = int(datetime.now().timestamp() - start_time)
     
     if user_answer == correct_answer:
         await user_db.update_statistics(user_id, True, time_spent)
@@ -921,20 +998,30 @@ async def process_game_answer(message: Message, state: FSMContext):
             parse_mode="HTML"
         )
     
-    # Keyingi savol
+    # KEYINGI SAVOLNI YUBORISH
     next_word = get_next_word(user_id)
-    
+    if not next_word:
+        await message.answer(get_text(lang, "no_words"))
+        await state.clear()
+        return
+
     if 'id' in next_word:
         await user_db.increment_word_count(next_word['id'])
-    
     await user_db.track_word(user_id, next_word.get('id', 0))
     
-    topic = next_word.get('category', 'Unknown')
-    section = next_word.get('sub_category', 'Unknown')
+    # Ma'lumotlarni tayyorlash
+    raw_topic = next_word.get('topic', next_word.get('category', 'Umumiy'))
+    topic = f"{raw_topic.replace('Topik-', '')}-topik" if 'Topik-' in raw_topic else raw_topic
+    section = next_word.get('section', next_word.get('sub_category', 'Asosiy'))
+    chapter = next_word.get('chapter', '---')
     
     await state.update_data(current_word=next_word, start_time=datetime.now().timestamp())
     await message.answer(
-        get_text(lang, "game_question", uzbek=next_word['uzbek'], topic=topic, section=section),
+        get_text(lang, "game_question", 
+                 uzbek=next_word['uzbek'], 
+                 topic=topic, 
+                 section=section, 
+                 chapter=chapter),
         reply_markup=get_game_keyboard(lang),
         parse_mode="HTML"
     )
@@ -945,7 +1032,6 @@ async def stop_game_handler(callback: CallbackQuery, state: FSMContext):
     lang = await user_db.get_language(user_id) or "uz"
     
     stats = await user_db.get_statistics(user_id)
-    
     await state.clear()
     
     await callback.message.edit_text(
@@ -958,7 +1044,6 @@ async def stop_game_handler(callback: CallbackQuery, state: FSMContext):
         reply_markup=get_main_menu_keyboard(lang)
     )
     await callback.answer()
-
 # ==================== AVTOMATIK O'YIN (Har 15 daqiqada) ====================
 
 @router.message(AutoPlayState.playing)
@@ -966,7 +1051,12 @@ async def process_auto_answer(message: Message, state: FSMContext):
     user_id = message.from_user.id
     lang = await user_db.get_language(user_id) or "uz"
     data = await state.get_data()
-    word = data['current_word']
+    word = data.get('current_word')
+    
+    if not word:
+        await state.clear()
+        return
+    
     question_count = data.get('question_count', 0)
     
     user_answer = message.text.strip().lower()
@@ -1007,10 +1097,15 @@ async def process_auto_answer(message: Message, state: FSMContext):
     
     await user_db.track_word(user_id, next_word.get('id', 0))
     
-    topic = next_word.get('category', 'Unknown')
-    section = next_word.get('sub_category', 'Unknown')
+    # Topik va bo'limni aniqlash
+    topic = next_word.get('topic', next_word.get('category', 'Umumiy'))
+    section = next_word.get('section', next_word.get('sub_category', 'Asosiy'))
     
-    await state.update_data(current_word=next_word, start_time=datetime.now().timestamp(), question_count=question_count)
+    await state.update_data(
+        current_word=next_word, 
+        start_time=datetime.now().timestamp(), 
+        question_count=question_count
+    )
     await message.answer(
         get_text(lang, "auto_question", uzbek=next_word['uzbek'], topic=topic, section=section),
         parse_mode="HTML"
@@ -1043,18 +1138,39 @@ async def send_auto_words():
                 
                 await user_db.track_word(user_id, word.get('id', 0))
                 
-                topic = word.get('category', 'Unknown')
-                section = word.get('sub_category', 'Unknown')
+                # Topik, bo'lim va bobni (chapter) aniqlash
+                # "Topik-35" dan faqat "35-topik" formatiga o'tkazish
+                raw_topic = word.get('topic', word.get('category', 'Umumiy'))
+                topic = f"{raw_topic.replace('Topik-', '')}-topik" if 'Topik-' in raw_topic else raw_topic
                 
-                # FSM holatini o'rnatish (har bir user uchun alohida)
-                state = FSMContext(storage=storage, key=f"{user_id}")
+                section = word.get('section', word.get('sub_category', 'Asosiy'))
+                chapter = word.get('chapter', 'Noma\'lum') # dictionary.json dan keladi
+                
+                # FSM holatini to'g'ri o'rnatish
+                from aiogram.fsm.storage.base import StorageKey
+                state_key = StorageKey(bot_id=bot.id, chat_id=user_id, user_id=user_id)
+                state = FSMContext(storage=storage, key=state_key)
+                
                 await state.set_state(AutoPlayState.playing)
-                await state.update_data(current_word=word, start_time=datetime.now().timestamp(), question_count=0)
+                await state.update_data(
+                    current_word=word, 
+                    start_time=datetime.now().timestamp(), 
+                    question_count=0 # Birinchi savol javob berganda 1 bo'ladi
+                )
                 
                 try:
+                    # Yangilangan get_text chaqiruvi
                     await bot.send_message(
                         user_id,
-                        get_text(lang, "auto_question", uzbek=word['uzbek'], topic=topic, section=section),
+                        get_text(
+                            lang, 
+                            "auto_question", 
+                            uzbek=word['uzbek'], 
+                            topic=topic, 
+                            section=section,
+                            chapter=chapter,
+                            count=1 # Birinchi savol bo'lgani uchun 1/10
+                        ),
                         parse_mode="HTML"
                     )
                 except Exception as e:

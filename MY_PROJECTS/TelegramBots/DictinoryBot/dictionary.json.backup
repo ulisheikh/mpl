@@ -73,6 +73,7 @@
                 "현실적인/대책": "amaliy-real chora tadbirlar",
                 "요구되다/talab": "qilinmoq"
             },
+            "27-savol so'zlari": {},
             "28-savol so'zlari": {
                 "구속": "qamoq",
                 "반발심": "norozilik hissi",
@@ -80,7 +81,7 @@
                 "관여하다": "aralashtirmoq,qatnashtirmoq"
             },
             "29-savol so'zlari": {
-                "피로하다": "charchamiq,toliqmoq",
+                "피로하다": "charchamoq,toliqmoq",
                 "간격": "masofa,oraliq",
                 "편집되어/있다": "montaj qilingan,tahrirlangan",
                 "등장인물": "qahramon,personaj",
@@ -88,10 +89,7 @@
                 "웹/소설": "online roman",
                 "짧은/분량": "qisqa hajmli"
             },
-            "30-savol so'zlari": {
-                "궁중": "saroy ichida"
-            }
+            "30-savol so'zlari": {}
         }
-        
     }
 }
