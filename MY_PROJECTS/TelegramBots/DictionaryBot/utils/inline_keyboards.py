@@ -30,9 +30,7 @@ def get_main_keyboard(uid):
     if lang == 'uz':
         markup.add(KeyboardButton("/start"))
     elif lang == 'ko':
-        markup.add(KeyboardButton("🏠 홈"))
-    else:
-        markup.add(KeyboardButton("🏠 HOME"))
+        markup.add(KeyboardButton("/start"))
     
     # 2-qator: Bo'limlar
     if lang == 'uz':

@@ -90,14 +90,8 @@
             },
             "30-savol so'zlari": {
                 "궁중": "saroy ichida"
-            }
-        }
-    },
-    "Topik-38": {
-        "reading": {
-            "1-savol so'zlari": {
-                "4444": "/newpass_user"
-            }
+            },
+            "33-savol so'zlari": {}
         }
     }
 }

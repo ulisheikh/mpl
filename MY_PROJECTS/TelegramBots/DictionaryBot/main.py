@@ -601,7 +601,7 @@ def text_handler(message):
     # ============================================
     # 🏠 BOSH MENYU
     # ============================================
-    if text in ['🏠 BOSH MENYU', '🏠 홈']:
+    if text == "/start":
         from admin.user_manager import get_all_users, get_user_words_count  # ✅ Import qo'shildi
         
         # Statistika

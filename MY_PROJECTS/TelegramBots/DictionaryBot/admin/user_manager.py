@@ -16,55 +16,44 @@ def ensure_users_info_file():
             json.dump({}, f, ensure_ascii=False, indent=2)
 
 
-def save_user_info(user_id, first_name=None, last_name=None, username=None):
-    """User ma'lumotlarini saqlash"""
-    ensure_users_info_file()
-    
-    with open(USERS_INFO_FILE, 'r', encoding='utf-8') as f:
-        users = json.load(f)
-    
-    uid = str(user_id)
-    
-    # Yangi user yoki mavjud userni yangilash
-    if uid not in users:
-        users[uid] = {
-            "first_name": first_name or "User",
-            "last_name": last_name or "",
-            "username": username or "",
-            "joined_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
-    else:
-        # Mavjud ma'lumotlarni yangilash
-        if first_name:
-            users[uid]["first_name"] = first_name
-        if last_name:
-            users[uid]["last_name"] = last_name
-        if username:
-            users[uid]["username"] = username
-    
-    with open(USERS_INFO_FILE, 'w', encoding='utf-8') as f:
-        json.dump(users, f, ensure_ascii=False, indent=2)
+def save_user_info(user_id, first_name, last_name, username):
+    # USERS_INFO_FILE o'zgaruvchisidan foydalanamiz (config.py dagi)
+    file_path = USERS_INFO_FILE 
+    users = {}
 
+    # 1. Faylni xavfsiz o'qish
+    if os.path.exists(file_path) and os.stat(file_path).st_size > 0:
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                users = json.load(f)
+        except:
+            users = {}
+
+    # 2. Ma'lumot qo'shish
+    users[str(user_id)] = {
+        "first_name": first_name if first_name else "",
+        "last_name": last_name if last_name else "",
+        "username": username if username else "",
+        "joined_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S") # joined_at deb nomlang
+    }
+
+    # 3. Faylga yozish
+    with open(file_path, 'w', encoding='utf-8') as f:
+        json.dump(users, f, indent=4, ensure_ascii=False)
 
 def get_user_info(user_id):
-    """User ma'lumotlarini olish"""
-    ensure_users_info_file()
+    """User ma'lumotlarini xavfsiz olish"""
+    file_path = USERS_INFO_FILE
     
-    with open(USERS_INFO_FILE, 'r', encoding='utf-8') as f:
-        users = json.load(f)
+    if not os.path.exists(file_path) or os.stat(file_path).st_size == 0:
+        return {"first_name": "User", "last_name": "", "username": "", "joined_at": "Noma'lum"}
     
-    uid = str(user_id)
-    
-    if uid in users:
-        return users[uid]
-    
-    # Ma'lumot yo'q bo'lsa default
-    return {
-        "first_name": "User",
-        "last_name": "",
-        "username": "",
-        "joined_at": "Unknown"
-    }
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            users = json.load(f)
+            return users.get(str(user_id), {"first_name": "User", "last_name": "", "username": "", "joined_at": "Noma'lum"})
+    except:
+        return {"first_name": "User", "last_name": "", "username": "", "joined_at": "Noma'lum"}
 
 
 def get_all_users():
