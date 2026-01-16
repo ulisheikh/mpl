@@ -1,138 +1,94 @@
+# -*- coding: utf-8 -*-
+"""
+🚀 GIT & GITHUB ULTIMATE MANAGER
+1. Repozitoriya va papkalarni boshqarish
+2. Terminal orqali GitHub repo yaratish (CLI)
+"""
 
-# ==============================
-#  GITHUB CLI KOMANDALARI
-# ==============================
+import os
 
-# 🎯 GITHUB CLI LOGIN - GitHub hisobiga autentifikatsiya qilish
-gh auth login
+# ============================================================
+# 1-BO'LIM: LOKAL REPO VA PAPKA AMALLARI
+# ============================================================
+git_operations = {
+    "1. YANGI REPOZITORIYA OCHISH": {
+        "git init": "Hozirgi papkani Git loyihasiga aylantirish.",
+        "git clone <url>": "Mavjud repozitoriyani GitHub'dan ko'chirib olish.",
+        "git remote add origin <url>": "Lokal papkani masofaviy GitHub repo bilan bog'lash."
+    },
+    "2. PAPKA VA FAYLLARNI QO'SHISH": {
+        "mkdir <nom>": "Yangi papka yaratish (Linux/Terminal buyrug'i).",
+        "touch <fayl>": "Yangi bo'sh fayl yaratish.",
+        "git add <papka_nomi>/": "Butun bir papkani Gitga qo'shish.",
+        "git add .": "Barcha yangi fayl va papkalarni staging'ga olish."
+    },
+    "3. O'CHIRISH (DELETE) AMALLARI": {
+        "git rm <fayl>": "Faylni ham Gitdan, ham diskdan o'chiradi.",
+        "git rm -r <papka>": "Papkani ham Gitdan, ham diskdan butunlay o'chiradi.",
+        "git rm --cached <fayl>": "Faylni GitHub'dan o'chiradi, lekin kompyuterda qoldiradi.",
+        "git rm -r --cached <papka>/": "Papkani GitHub'dan o'chiradi, lekin lokalda qoldiradi.",
+        "rm -rf .git": "Lokal papkadagi Git tarixini butunlay o'chirib, uni oddiy papkaga aylantirish."
+    },
+    "4. KO'CHIRISH VA NOMINI O'ZGARTIRISH": {
+        "git mv <eski_nom> <yangi_nom>": "Fayl yoki papka nomini o'zgartirish (Git buni darhol sezadi).",
+        "git mv <fayl> <papka>/": "Faylni bir papkadan boshqasiga ko'chirish."
+    },
+    "5. REPOZITORIYANI TOZALASH (RESET)": {
+        "git reset --hard origin/main": "Lokal kodingizni GitHub'dagi holat bilan bir xil qiladi (hamma o'zgarishlar o'chadi).",
+        "git clean -fd": "Gitda yo'q bo'lgan barcha ortiqcha papka va fayllarni o'chirib tashlash."
+    }
+}
 
-# 📂 REPOSITORY NOMINI O'ZGARTIRISH - GitHub repository nomini o'zgartirish
-gh repo edit --name YANGI_REPO
+# ============================================================
+# 2-BO'LIM: GITHUB CLI VA REMOTE CREATOR
+# ============================================================
+github_cli_guide = {
+    "1. GH CLI ORQALI (TAVSIYA ETILADI)": {
+        "gh auth login": "GitHub akkauntingizga terminaldan kirish.",
+        "gh repo create <nom> --public": "Yangi ochiq repo yaratish.",
+        "gh repo create <nom> --private": "Yangi yopiq (shaxsiy) repo yaratish.",
+        "gh repo create <nom> --clone": "Yaratish va darhol kompyuterga ko'chirib olish."
+    },
+    "2. CURL (API) ORQALI (PROGRAMMISTLAR UCHUN)": {
+        "curl -u 'USER' https://api.github.com/user/repos -d '{\"name\":\"NOM\"}'": "API orqali yangi repo ochish."
+    },
+    "3. LOKALNI MASOFAVIYGA ULASH": {
+        "git remote add origin <url>": "Lokalni yangi ochilgan repo bilan bog'lash.",
+        "git branch -M main": "Asosiy branch nomini 'main'ga o'zgartirish.",
+        "git push -u origin main": "Kodni birinchi marta yuklash (ulash)."
+    },
+    "4. REPOZITORIYANI O'CHIRISH (CLI)": {
+        "gh repo delete <user/repo>": "GitHub saytiga kirmasdan reponi o'chirib tashlash."
+    }
+}
 
-# 📂 O'ZGARTIRISHNI YANGI REPOSITORY NOMI BILAN - Boshqa repository nomini o'zgartirish
-gh repo edit --repo YOUR_USERNAME/ESKI_REPO --name YANGI_REPO
+def display_git_info():
+    # Terminalni tozalash
+    os.system('cls' if os.name == 'nt' else 'clear')
+    
+    # 1-Jadvalni chiqarish
+    print("="*85)
+    print("🛠  1-BO'LIM: GIT REPO VA PAPKA BOSHQARUVI")
+    print("="*85)
+    for section, commands in git_operations.items():
+        print(f"\n📂 {section}")
+        for cmd, info in commands.items():
+            print(f"  🔘 {cmd.ljust(35)} | {info}")
+            
+    print("\n" + "—"*85 + "\n")
 
-# 🎮 REPOSITORY KLONLASH - GitHub repository'sini lokalga klonlash
-gh repo clone REPO_NOMI
+    # 2-Jadvalni chiqarish
+    print("="*85)
+    print("🌐 2-BO'LIM: GITHUB TERMINAL COMMANDS (CREATE & DELETE REPO)")
+    print("="*85)
+    for section, commands in github_cli_guide.items():
+        print(f"\n📁 {section}")
+        for cmd, info in commands.items():
+            print(f"  ⭐ {cmd.ljust(45)} | {info}")
 
-# 🔧 YANGI REPOSITORY YARATISH - Yangi repository yaratish
-gh repo create REPO_NOMI --public or --private
+    print("\n" + "="*85)
+    print("💡 MASLAHAT: 'gh' (GitHub CLI) orqali saytga kirmay repo ochish eng tezkor yo'ldir.")
+    print("="*85)
 
-# 🗑️ REPOSITORY O'CHIRISH - GitHub repository'sini o'chirish
-gh repo delete REPO_NOMI
-
-# 🔄 REPOSITORY FORK QILISH - Repository'ni forking qilish
-gh repo fork REPO_NOMI
-
-# 🗂️ REPOSITORY RO'YXATINI KO'RISH - GitHubdagi barcha repository'larni ko'rish
-gh repo list
-
-# 🔍 REPOSITORY HAQIDA MA'LUMOT - Repository haqidagi ma'lumotlarni ko'rsatish
-gh repo view REPO_NOMI
-
-# 🔄 REPOSITORY NOMINI O'ZGARTIRISH - Repository nomini o'zgartirish
-gh repo rename REPO_NOMI
-
-# 🗂️ REPOSITORY ARCHIVE QILISH - Repository'ni archive qilish
-gh repo archive REPO_NOMI
-
-# 🔓 REPOSITORY UNARCHIVE QILISH - Repository'ni unarchive qilish
-gh repo unarchive REPO_NOMI
-
-# 🔄 REPOSITORY SINKRONIZATSIYA QILISH - Repository'ni GitHub bilan sinkronizatsiya qilish
-gh repo sync REPO_NOMI
-
-# 🏆 DEFAULT REPOSITORY SOZLASH - GitHub'da default repository sifatida sozlash
-gh repo set-default REPO_NOMI
-
-# 📑 GITHUB ISSUES YARATISH - Yangi issue yaratish
-gh issue create --title "ISSUE_TITLE" --body "ISSUE_DESCRIPTION"
-
-# 📝 GITHUB PULL REQUEST YARATISH - Yangi pull request yaratish
-gh pr create --title "PR_TITLE" --body "PR_DESCRIPTION"
-
-# 🔄 GITHUB PULL REQUESTNI MERGE QILISH - Pull requestni merge qilish
-gh pr merge PR_NUMBER
-
-# ==============================
-#  GITHUB API BILAN REPOSITORY NOMINI O'ZGARTIRISH
-# ==============================
-
-# 🎯 GITHUB API YORDAMIDA REPOSITORY NOMINI O'ZGARTIRISH - GitHub API yordamida repository nomini o'zgartirish
-curl -X PATCH -H "Authorization: token YOUR_GITHUB_TOKEN" \
--H "Accept: application/vnd.github.v3+json" \
-https://api.github.com/repos/YOUR_USERNAME/OLD_REPO_NAME \
--d '{"name": "NEW_REPO_NAME"}'
-
-# ==============================
-#  GIT KOMANDALARI (REPOSITORY URL O'ZGARTIRISH)
-# ==============================
-
-# 🔄 GIT REMOTE URL'NI KO'RISH - Git remote URL'ni ko'rish
-git remote -v
-
-# 🔧 GIT REMOTE URL'NI YANGILASH - Git remote URL'ni yangi repository nomi bilan yangilash
-git remote set-url origin https://github.com/YOUR_USERNAME/YANGI_REPO.git
-
-# 🔄 YANGILANGAN REMOTE URL'NI TEKSHIRISH - Yangi URL'ni tekshirish
-git remote -v
-
-# 📝 GIT COMMIT QILISH - O'zgartirishlarni commit qilish
-git commit -m "COMMIT_MESSAGE"
-
-# 📤 GIT PUSH QILISH - O'zgartirishlarni remote repository'ga yuborish
-git push origin BRANCH_NAME
-
-# 📥 GIT PULL QILISH - O'zgarishlarni remote repository'dan olish
-git pull origin BRANCH_NAME
-
-# 🔄 GIT BRANCH YARATISH - Yangi branch yaratish
-git checkout -b NEW_BRANCH_NAME
-
-# 📄 GIT BRANCH NI O'ZGARTIRISH - Branchni o'zgartirish
-git checkout BRANCH_NAME
-
-# 🔄 GIT STATUS - Repositorydagi o'zgarishlarni ko'rish
-git status
-
-# 🔍 GIT LOG - Commitlar tarixini ko'rish
-git log
-
-# 🗑️ GIT RESET - O'zgarishlarni qaytarish
-git reset --hard
-
-# ==============================
-#  GIT TAGLAR BILAN ISHLASH
-# ==============================
-
-# 🎯 GIT TAG YARATISH - Yangi tag yaratish
-git tag -a TAG_NAME -m "TAG_MESSAGE"
-
-# 📤 GIT TAG PUSH QILISH - Tag'ni remote repository'ga yuborish
-git push origin TAG_NAME
-
-# ==============================
-#  GIT MERGE BILAN ISHLASH
-# ==============================
-
-# 🔄 GIT MERGE - Branchlarni birlashtirish
-git merge BRANCH_NAME
-
-# 📄 GIT MERGE CONFLICTS - Merge conflictlarni ko'rish
-git diff
-
-# Cache fayllarni o‘chirish (misol uchun: __pycache__)
-git rm -r --cached __pycache__
-
-# Git reposida barcha cache fayllarni o‘chirish
-git rm -r --cached .
-git add .
-git commit -m "Git cache tozalandi va qayta kuzatish boshlandi"
-git push origin main
-
-
-# Barcha o‘chirilgan fayllarni saqlash
-git commit -m "Removed cache files"
-
-# O‘zgarishlarni GitHub-ga yuborish
-git push origin main
+if __name__ == "__main__":
+    display_git_info()
