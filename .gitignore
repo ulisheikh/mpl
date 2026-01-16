@@ -70,3 +70,10 @@ Thumbs.db
 *~
 tmp/
 temp/
+
+# --- Backups (Zaxira nusxalar) ---
+# Kodda .backup fayllar yaratish qismi bor, bularni ham yashirish kerak
+backups/
+*.backup
+*.bak
+backup_*.json

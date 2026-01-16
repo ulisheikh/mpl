@@ -30,6 +30,38 @@ def save_passwords(passwords):
     with open(PASSWORDS_FILE, 'w', encoding='utf-8') as f:
         json.dump(passwords, f, ensure_ascii=False, indent=4)
 
+import json
+import os
+
+def update_password(role, new_password):
+    # FAYL YO'LI ANIQLANDI:
+    file_path = "database/passwords.json" 
+    
+    if os.path.exists(file_path):
+        try:
+            # 1. Asl faylni o'qiymiz
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            # 2. Yangilaymiz
+            if role == 'user':
+                data['user_password'] = str(new_password)
+            elif role == 'admin':
+                data['admin_password'] = str(new_password)
+                
+            # 3. Aynan o'sha faylga qayta yozamiz
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=4, ensure_ascii=False)
+            
+            print(f"✅ Parol {file_path} ichida yangilandi!")
+            return True
+        except Exception as e:
+            print(f"❌ Faylga yozishda xato: {e}")
+            return False
+    else:
+        print(f"❌ Xato: {file_path} topilmadi!")
+        return False
+
 def load_sessions():
     """Sessiyalarni yuklash"""
     if os.path.exists(SESSIONS_FILE):

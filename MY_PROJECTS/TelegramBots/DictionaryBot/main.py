@@ -582,7 +582,34 @@ def callback_handler(call):
         print(f"Callback error: {e}")
         bot.answer_callback_query(call.id, "❌ Xatolik", show_alert=True)
 
+# ============================================
+# PAROL O'ZGARTIRISH BUYRUQLARI
+# ============================================
+@bot.message_handler(commands=['newpass_user', 'newpass_admin'])
+def change_password_handlers(message):
+    uid = message.from_user.id
+    text = message.text
+    
+    if not is_logged_in(uid):
+        bot.reply_to(message, "⚠️ Avval botga kiring!")
+        return
 
+    parts = text.split()
+    if len(parts) < 2:
+        cmd = parts[0]
+        bot.reply_to(message, f"⚠️ Xato! Parolni ham yozing.\nMisol: `{cmd} 8888`", parse_mode="Markdown")
+        return
+
+    new_pwd = parts[1]
+    
+    # Qaysi parolni o'zgartirishni aniqlaymiz
+    role = 'user' if 'newpass_user' in text else 'admin'
+    
+    # FAYLGA SAQLASH (Tepada yozgan funksiyamiz)
+    if update_password(role, new_pwd):
+        bot.reply_to(message, f"✅ {role.capitalize()} paroli muvaffaqiyatli o'zgartirildi: `{new_pwd}`", parse_mode="Markdown")
+    else:
+        bot.reply_to(message, "❌ Xatolik yuz berdi. passwords.json faylini tekshiring.")
 #============================================
 #ASOSIY TEXT HANDLER
 #============================================
@@ -591,7 +618,9 @@ def text_handler(message):
     """Barcha matnli xabarlar"""
     uid = message.from_user.id
     text = message.text.strip()
-    
+    # AGAR BUYRUQ BO'LSA, BU YERDA TO'XTATISH (YANGI QATOR)
+    if text.startswith('/'):
+        return
     # Login tekshirish
     if not is_logged_in(uid):
         bot.send_message(uid, get_text(uid, 'enter_password'))
