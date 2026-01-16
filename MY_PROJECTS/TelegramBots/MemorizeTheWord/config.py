@@ -1,11 +1,13 @@
 # Bot Configuration
 BOT_TOKEN = "8438341822:AAFTrdSDXv8aUOfUm2Q1Wd1d30KFy7rbd14"
-ADMIN_PASSWORD = "7777"
-ADMIN_IDS = []  # Admin ID lar shu yerga qo'shiladi
 
 # Database path
-DICTIONARY_PATH = "../DictinoryBot/dictionary.json"
+import os
+# User database yo'li
 USER_DB_PATH = "database/users.db"
+
+# DictionaryBot user_data papkasi
+DICTIONARY_BASE_PATH = "../DictionaryBot/user_data"
 
 # Languages
 LANGUAGES = {

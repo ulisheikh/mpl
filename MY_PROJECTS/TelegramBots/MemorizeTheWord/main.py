@@ -15,10 +15,25 @@ from aiogram.types import (
     InlineKeyboardButton,
     ReplyKeyboardRemove
 )
-
-from config import BOT_TOKEN, ADMIN_PASSWORD, DICTIONARY_PATH, USER_DB_PATH
-from utils.db_handler import DictionaryHandler
 from database.db import UserDatabase
+
+from config import BOT_TOKEN,DICTIONARY_BASE_PATH, USER_DB_PATH
+from utils.db_handler import DictionaryHandler
+
+# DEBUG: Yo'lni tekshirish
+import os
+print(f"\n{'='*50}")
+print(f"📂 Hozirgi papka: {os.getcwd()}")
+print(f"📂 Dictionary path: {DICTIONARY_BASE_PATH}")
+print(f"📂 Mavjudmi: {os.path.exists(DICTIONARY_BASE_PATH)}")
+
+if os.path.exists(DICTIONARY_BASE_PATH):
+    files = os.listdir(DICTIONARY_BASE_PATH)
+    print(f"📄 Fayllar: {files}")
+print(f"{'='*50}\n")
+
+# Dictionary handler
+dict_handler = DictionaryHandler(DICTIONARY_BASE_PATH)
 
 # Initialization
 bot = Bot(token=BOT_TOKEN)
@@ -26,7 +41,7 @@ storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 router = Router()
 
-dict_handler = DictionaryHandler(DICTIONARY_PATH)
+dict_handler = DictionaryHandler(DICTIONARY_BASE_PATH)
 user_db = UserDatabase(USER_DB_PATH)
 
 # Global so'zlar tracking
@@ -240,7 +255,7 @@ Sen bu so'zni bilasanmi? 🤔
 📂 <b>토픽:</b> {topic}
 📖 <b>섹션:</b> {section}
 
-🇺🇿 <b>{uzbek}</b>
+>>> <i>{uzbek}</i>
 
 📝 한국어로 작성하세요:
 """,
@@ -252,12 +267,12 @@ Sen bu so'zni bilasanmi? 🤔
 📂 <b>토픽:</b> {topic}
 📖 <b>섹션:</b> {section}
 
-🇺🇿 <b>{uzbek}</b>
+>>> <i>{uzbek}</i>
 
 📝 한국어로 작성하세요:
 """,
-        "game_correct": "✅ <b>정답입니다!</b>\n\n🇺🇿 {uzbek}\n🇰🇷 {korean}",
-        "game_wrong": "❌ <b>오답입니다!</b>\n\n🇺🇿 {uzbek}\n🇰🇷 {korean}\n\n📌 입력: <code>{user_answer}</code>",
+        "game_correct": "✅ <b>정답입니다!</b>\n\n>>> {uzbek}\n🇰🇷 {korean}",
+        "game_wrong": "❌ <b>오답입니다!</b>\n\n>>> {uzbek}\n🇰🇷 {korean}\n\n📌 입력: <code>{user_answer}</code>",
         "game_stopped": "🛑 게임 중지!\n\n✅ 정답: {correct}\n❌ 오답: {wrong}",
         "chapters_select_topic": "📂 토픽 선택:",
         "chapters_select_section": "📖 섹션 선택:",
@@ -272,7 +287,7 @@ Sen bu so'zni bilasanmi? 🤔
     "game_question": """
 🎮 <b>질문:</b>
 
-🇺🇿 <b>{uzbek}</b>
+>>> <i>{uzbek}</i>
 
 📍 <code>{topic} > {section} > {chapter}</code>
 📝 <b>한국어로 작성하세요:</b>
@@ -283,7 +298,7 @@ Sen bu so'zni bilasanmi? 🤔
 
 <i>이 단어를 알고 있나요?</i> 🤔
 
-🇺🇿 <b>{uzbek}</b>
+>>> <i>{uzbek}</i>
 
 📍 <code>{topic} > {section} > {chapter}</code>
 📝 <b>한국어로 작성하세요:</b>
@@ -300,7 +315,7 @@ def get_text(lang: str, key: str, **kwargs) -> str:
 
 def get_next_word(user_id: int):
     """Takrorlanmaslik uchun so'z olish"""
-    all_words = dict_handler.get_all_words()
+    all_words = dict_handler.get_all_words(user_id)  # ✅ user_id qo'shildi
     
     if not all_words:
         return None
@@ -346,51 +361,55 @@ def get_game_keyboard(lang: str) -> InlineKeyboardMarkup:
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-def get_chapters_topics_keyboard(lang: str) -> InlineKeyboardMarkup:
+def get_chapters_topics_keyboard(user_id: int, lang: str) -> InlineKeyboardMarkup:
     """Topiklar ro'yxati"""
-    topics = dict_handler.get_all_topics()
-    keyboard = []
+    topics = dict_handler.get_all_topics(user_id)  # ✅
     
+    keyboard = []
     for topic in topics:
-        keyboard.append([
-            InlineKeyboardButton(text=topic, callback_data=f"topic_{topic}")
-        ])
+        keyboard.append([InlineKeyboardButton(
+            text=f"📚 {topic}",
+            callback_data=f"topic_{topic}"
+        )])
     
-    keyboard.append([
-        InlineKeyboardButton(text=get_text(lang, "back_to_menu"), callback_data="back_to_menu")
-    ])
+    keyboard.append([InlineKeyboardButton(
+        text=get_text(lang, "back"),
+        callback_data="main_menu"
+    )])
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-def get_chapters_sections_keyboard(topic: str, lang: str) -> InlineKeyboardMarkup:
-    """Bo'limlar (reading, writing, listening)"""
-    sections = dict_handler.get_topic_sections(topic)
-    keyboard = []
+def get_chapters_sections_keyboard(user_id: int, topic: str, lang: str) -> InlineKeyboardMarkup:
+    sections = dict_handler.get_topic_sections(user_id, topic)  # ✅
     
+    keyboard = []
     for section in sections:
-        keyboard.append([
-            InlineKeyboardButton(text=section.title(), callback_data=f"section_{topic}_{section}")
-        ])
+        keyboard.append([InlineKeyboardButton(
+            text=f"📖 {section.title()}",
+            callback_data=f"section_{topic}_{section}"
+        )])
     
-    keyboard.append([
-        InlineKeyboardButton(text=get_text(lang, "back"), callback_data="chapters_main")
-    ])
+    keyboard.append([InlineKeyboardButton(
+        text=get_text(lang, "back"),
+        callback_data="chapters_main"
+    )])
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-def get_chapters_chapters_keyboard(topic: str, section: str, lang: str) -> InlineKeyboardMarkup:
-    """Boblar (9-savol, 13-savol...)"""
-    chapters = dict_handler.get_section_chapters(topic, section)
+def get_chapters_chapters_keyboard(user_id: int, topic: str, section: str, lang: str) -> InlineKeyboardMarkup:
+    chapters = dict_handler.get_section_chapters(user_id, topic, section)  # ✅
+    
     keyboard = []
-    
     for chapter in chapters:
-        keyboard.append([
-            InlineKeyboardButton(text=chapter, callback_data=f"chapter_{topic}_{section}_{chapter}")
-        ])
+        keyboard.append([InlineKeyboardButton(
+            text=f"📝 {chapter}",
+            callback_data=f"chapter_{topic}_{section}_{chapter}"
+        )])
     
-    keyboard.append([
-        InlineKeyboardButton(text=get_text(lang, "back"), callback_data=f"topic_{topic}")
-    ])
+    keyboard.append([InlineKeyboardButton(
+        text=get_text(lang, "back"),
+        callback_data=f"section_{topic}_{section}"
+    )])
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -485,8 +504,8 @@ async def cmd_start(message: Message):
     
     # Statistika
     total_users = await user_db.get_total_users()
-    total_topics = len(dict_handler.get_all_topics())
-    total_words = dict_handler.get_total_words()
+    total_topics = len(dict_handler.get_all_topics(user_id))  # ✅ user_id qo'shildi
+    total_words = dict_handler.get_total_words(user_id)       # ✅ user_id qo'shildi
     
     await message.answer(
         get_text(lang, "start_message", users=total_users, topics=total_topics, words=total_words),
@@ -520,7 +539,7 @@ async def cmd_chapters(message: Message):
     
     await message.answer(
         get_text(lang, "chapters_select_topic"),
-        reply_markup=get_chapters_topics_keyboard(lang)
+        reply_markup=get_chapters_topics_keyboard(user_id, lang)  # ✅
     )
 
 # Til tanlash callback
@@ -631,7 +650,7 @@ async def chapters_main_handler(callback: CallbackQuery):
     
     await callback.message.edit_text(
         get_text(lang, "chapters_select_topic"),
-        reply_markup=get_chapters_topics_keyboard(lang)
+        reply_markup=get_chapters_topics_keyboard(user_id, lang)  # ✅
     )
     await callback.answer()
 
@@ -643,7 +662,7 @@ async def chapters_topic_selected(callback: CallbackQuery):
     
     await callback.message.edit_text(
         f"📂 {topic}\n\n" + get_text(lang, "chapters_select_section"),
-        reply_markup=get_chapters_sections_keyboard(topic, lang)
+        reply_markup=get_chapters_sections_keyboard(user_id, topic, lang)  # ✅
     )
     await callback.answer()
 
@@ -658,7 +677,7 @@ async def chapters_section_selected(callback: CallbackQuery):
     
     await callback.message.edit_text(
         f"📖 {topic} → {section.title()}\n\n" + get_text(lang, "chapters_select_chapter"),
-        reply_markup=get_chapters_chapters_keyboard(topic, section, lang)
+        reply_markup=get_chapters_chapters_keyboard(user_id, topic, section, lang)  # ✅
     )
     await callback.answer()
 
@@ -672,7 +691,7 @@ async def chapters_chapter_selected(callback: CallbackQuery):
     user_id = callback.from_user.id
     lang = await user_db.get_language(user_id) or "uz"
     
-    words = dict_handler.get_chapter_words(topic, section, chapter)
+    words = dict_handler.get_chapter_words(user_id, topic, section, chapter)  # ✅
     
     if not words:
         await callback.answer(get_text(lang, "no_words"), show_alert=True)
@@ -680,7 +699,7 @@ async def chapters_chapter_selected(callback: CallbackQuery):
     
     text = f"📚 <b>{chapter}</b>\n\n"
     for korean, uzbek in words.items():
-        text += f"🇰🇷 {korean} — 🇺🇿 {uzbek}\n"
+        text += f"🇰🇷 {korean} – 🇺🇿 {uzbek}\n"
     
     text += f"\n📊 {get_text(lang, 'statistics')}: {len(words)}"
     
@@ -868,7 +887,10 @@ async def admin_stats_handler(callback: CallbackQuery):
     lang = await user_db.get_language(user_id) or "uz"
     
     total_users = await user_db.get_total_users()
-    total_words = dict_handler.get_total_words()
+    
+    # BARCHA userlarning so'zlari
+    all_users = await user_db.get_all_users()
+    total_words = sum(dict_handler.get_total_words(u['user_id']) for u in all_users)  # ✅
     
     await callback.message.edit_text(
         get_text(lang, "bot_statistics", users=total_users, words=total_words),
