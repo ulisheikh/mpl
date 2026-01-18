@@ -769,76 +769,59 @@ async def process_game_answer(message: Message, state: FSMContext):
 @router.message(AutoPlayState.playing, lambda message: not message.text.startswith('/'))
 async def process_auto_answer(message: Message, state: FSMContext):
     user_id = message.from_user.id
-    # Foydalanuvchi tilini olish (lekin xabarlarni inglizcha qilamiz)
     lang = await user_db.get_language(user_id) or "uz"
     data = await state.get_data()
     word = data.get('current_word')
 
-    if not word:
-        return
+    if not word: return
 
-    # 1. JAVOBNI TEKSHIRISH
+    # 1. JAVOBNI TEKSHIRISH MATNI
     user_answer = message.text.strip().lower()
     correct_answer = word['korean'].strip().lower()
     
-    # Xabarlarni ingliz tiliga o'giramiz va birlashtiramiz
     if user_answer == correct_answer:
         await user_db.update_statistics(user_id, True, 0)
-        feedback_text = (
-            "✅ <b>Correct!</b>\n"
-            "🤖 <i>(Auto-mode is continuing...)</i>"
-        )
+        feedback = "✅ <b>Correct!</b>"
     else:
         await user_db.update_statistics(user_id, False, 0)
-        feedback_text = (
-            f"❌ <b>Incorrect!</b>\n"
-            f"🇰🇷 Answer: <code>{word['korean']}</code>\n"
-            f"🤖 <i>(Auto-mode is continuing...)</i>"
-        )
+        feedback = f"❌ <b>Incorrect!</b>\nAnswer: <code>{word['korean']}</code>"
 
-    # Natijani bitta xabar qilib yuborish
-    await message.answer(feedback_text, parse_mode="HTML")
-
-    # 2. KEYINGI SAVOLNI YUBORISH
+    # 2. KEYINGI SAVOL MATNINI TAYYORLASH
     current_step = data.get('auto_current_step', 1)
     max_steps = 10 
+    
+    full_message = feedback # Xabarni yig'ishni boshlaymiz
 
     if current_step < max_steps:
         next_step = current_step + 1
-        # Keyingi yangi so'zni olish
-        next_word = dict_handler.get_random_word(
-            user_id,
-            topic=data.get('topic'),
-            section=data.get('section')
-        )
+        next_word = dict_handler.get_random_word(user_id, topic=data.get('topic'))
         
         if next_word:
-            # Lug'atdagi auto_question matnini olish
-            text = get_text(
-                lang, "auto_question", 
-                uzbek=next_word['uzbek'], 
-                topic=next_word.get('topic', '...'),
-                section=next_word.get('section', '...'),
-                chapter=next_word.get('chapter', '...'),
-                count=next_step
+            # Siz xohlagandek ajratuvchi chiziq va yangi savol
+            separator = "\n\n" + "━" * 15 + "\n\n"
+            
+            # Yangi savol qismini shakllantiramiz
+            question_part = (
+                f"🤖 <b>(AVTOMATIK SAVOL)</b> {next_step}/10\n\n"
+                f">>> <b>{next_word['uzbek']}</b>\n\n"
+                f"📍 {next_word.get('topic', '...')} › {next_word.get('section', '...')}\n"
+                f"📝 Koreys tilida yozing:"
             )
             
-            # State-ni yangilash
-            await state.update_data(
-                current_word=next_word, 
-                auto_current_step=next_step
-            )
+            # Ikkalasini birlashtiramiz
+            full_message += separator + question_part
             
-            # Keyingi savolni yuborish
-            await message.answer(text, parse_mode="HTML")
+            # State-ni yangilaymiz
+            await state.update_data(current_word=next_word, auto_current_step=next_step)
+        
+        # JAVOB VA YANGI SAVOLNI BITTA QILIB YUBORAMIZ
+        await message.answer(full_message, parse_mode="HTML")
+        
     else:
-        # 10 talik paket tugaganda
+        # 10-savol bo'lsa, tugatish xabarini qo'shamiz
+        full_message += "\n\n🏁 <b>Auto-session finished!</b>"
         await state.update_data(current_word=None)
-        finish_text = (
-            "🏁 <b>Auto-session finished!</b>\n"
-            "Next package will arrive at the scheduled time."
-        )
-        await message.answer(finish_text, parse_mode="HTML")
+        await message.answer(full_message, parse_mode="HTML")
 
 # ============================================
 # O'YINNI TO'XTATISH
