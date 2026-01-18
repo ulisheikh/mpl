@@ -773,57 +773,43 @@ async def process_auto_answer(message: Message, state: FSMContext):
     data = await state.get_data()
     word = data.get('current_word')
 
-    if not word:
-        return
+    if not word: return
 
-    # 1. Javobni tekshirish
+    # JAVOBNI TEKSHIRISH VA JAVOB MATNINI SHAKLLANTIRISH
     user_answer = message.text.strip().lower()
     correct_answer = word['korean'].strip().lower()
     
     if user_answer == correct_answer:
         await user_db.update_statistics(user_id, True, 0)
-        await message.answer(f"✅ <b>To'g'ri!</b>\n🤖 <i>(Avtomatik paket)</i>", parse_mode="HTML")
+        await message.answer(f"✅ <b>To'g'ri!</b>\n🤖 <i>(auto game)</i>", parse_mode="HTML")
     else:
         await user_db.update_statistics(user_id, False, 0)
-        await message.answer(f"❌ <b>Xato!</b> 🇰🇷: <code>{word['korean']}</code>\n🤖 <i>(Avtomatik paket)</i>", parse_mode="HTML")
-
-    # 2. Keyingi savolga o'tish (Paket ichidagi mantiq)
-    current_step = data.get('auto_current_step', 1)
-    max_steps = 10 
-
-    if current_step < max_steps:
-        next_step = current_step + 1
-        # Keyingi yangi so'zni olish
-        next_word = dict_handler.get_random_word(
-            user_id,
-            topic=data.get('topic'),
-            section=data.get('section')
+        # Bitta xabarda xato va to'g'ri javobni ko'rsatish
+        await message.answer(
+            f"❌ <b>Xato!</b> 🇰🇷: <code>{word['korean']}</code>\n"
+            f"🤖 <i>(auto game davom etmoqda...)</i>", 
+            parse_mode="HTML"
         )
+
+    # KEYINGI SAVOLNI YUBORISH (Oldingi mantiq bilan bir xil)
+    current_step = data.get('auto_current_step', 1)
+    if current_step < 10:
+        next_step = current_step + 1
+        next_word = dict_handler.get_random_word(user_id, topic=data.get('topic'))
         
         if next_word:
-            # DIQQAT: Barcha argumentlarni uzatamiz
-            # Bu yerda 'auto_question' lug'atdagi kalit nomi
-            text = get_text(
-                lang, "auto_question", 
-                uzbek=next_word['uzbek'], 
-                topic=next_word.get('topic', '...'),
-                section=next_word.get('section', '...'),
-                chapter=next_word.get('chapter', '...'),
-                count=next_step # Bu yerda 2, 3... bo'lib chiqadi
-            )
+            text = get_text(lang, "auto_question", 
+                            uzbek=next_word['uzbek'], 
+                            topic=next_word.get('topic', '...'),
+                            section=next_word.get('section', '...'),
+                            chapter=next_word.get('chapter', '...'),
+                            count=next_step)
             
-            # State-ni yangilash: yangi so'z va yangi qadam soni
-            await state.update_data(
-                current_word=next_word, 
-                auto_current_step=next_step
-            )
-            
-            # Yangi savolni yuborish (Faqat 'text'ni o'zi, chunki sarlavha text ichida bor)
+            await state.update_data(current_word=next_word, auto_current_step=next_step)
             await message.answer(text, parse_mode="HTML")
     else:
-        # 10 ta savol tugadi, current_word ni tozalaymiz
         await state.update_data(current_word=None)
-        await message.answer("🏁 <b>Navbatdagi 10 talik paket tugadi!</b>\nKeyingi savollar belgilangan vaqtdan so'ng yuboriladi.", parse_mode="HTML")
+        await message.answer("🏁 <b>Navbatdagi 10 talik paket tugadi!</b>")
 
 # ============================================
 # O'YINNI TO'XTATISH
