@@ -769,47 +769,76 @@ async def process_game_answer(message: Message, state: FSMContext):
 @router.message(AutoPlayState.playing, lambda message: not message.text.startswith('/'))
 async def process_auto_answer(message: Message, state: FSMContext):
     user_id = message.from_user.id
+    # Foydalanuvchi tilini olish (lekin xabarlarni inglizcha qilamiz)
     lang = await user_db.get_language(user_id) or "uz"
     data = await state.get_data()
     word = data.get('current_word')
 
-    if not word: return
+    if not word:
+        return
 
-    # JAVOBNI TEKSHIRISH VA JAVOB MATNINI SHAKLLANTIRISH
+    # 1. JAVOBNI TEKSHIRISH
     user_answer = message.text.strip().lower()
     correct_answer = word['korean'].strip().lower()
     
+    # Xabarlarni ingliz tiliga o'giramiz va birlashtiramiz
     if user_answer == correct_answer:
         await user_db.update_statistics(user_id, True, 0)
-        await message.answer(f"✅ <b>To'g'ri!</b>\n🤖 <i>(auto game)</i>", parse_mode="HTML")
+        feedback_text = (
+            "✅ <b>Correct!</b>\n"
+            "🤖 <i>(Auto-mode is continuing...)</i>"
+        )
     else:
         await user_db.update_statistics(user_id, False, 0)
-        # Bitta xabarda xato va to'g'ri javobni ko'rsatish
-        await message.answer(
-            f"❌ <b>Xato!</b> 🇰🇷: <code>{word['korean']}</code>\n"
-            f"🤖 <i>(auto game davom etmoqda...)</i>", 
-            parse_mode="HTML"
+        feedback_text = (
+            f"❌ <b>Incorrect!</b>\n"
+            f"🇰🇷 Answer: <code>{word['korean']}</code>\n"
+            f"🤖 <i>(Auto-mode is continuing...)</i>"
         )
 
-    # KEYINGI SAVOLNI YUBORISH (Oldingi mantiq bilan bir xil)
+    # Natijani bitta xabar qilib yuborish
+    await message.answer(feedback_text, parse_mode="HTML")
+
+    # 2. KEYINGI SAVOLNI YUBORISH
     current_step = data.get('auto_current_step', 1)
-    if current_step < 10:
+    max_steps = 10 
+
+    if current_step < max_steps:
         next_step = current_step + 1
-        next_word = dict_handler.get_random_word(user_id, topic=data.get('topic'))
+        # Keyingi yangi so'zni olish
+        next_word = dict_handler.get_random_word(
+            user_id,
+            topic=data.get('topic'),
+            section=data.get('section')
+        )
         
         if next_word:
-            text = get_text(lang, "auto_question", 
-                            uzbek=next_word['uzbek'], 
-                            topic=next_word.get('topic', '...'),
-                            section=next_word.get('section', '...'),
-                            chapter=next_word.get('chapter', '...'),
-                            count=next_step)
+            # Lug'atdagi auto_question matnini olish
+            text = get_text(
+                lang, "auto_question", 
+                uzbek=next_word['uzbek'], 
+                topic=next_word.get('topic', '...'),
+                section=next_word.get('section', '...'),
+                chapter=next_word.get('chapter', '...'),
+                count=next_step
+            )
             
-            await state.update_data(current_word=next_word, auto_current_step=next_step)
+            # State-ni yangilash
+            await state.update_data(
+                current_word=next_word, 
+                auto_current_step=next_step
+            )
+            
+            # Keyingi savolni yuborish
             await message.answer(text, parse_mode="HTML")
     else:
+        # 10 talik paket tugaganda
         await state.update_data(current_word=None)
-        await message.answer("🏁 <b>Navbatdagi 10 talik paket tugadi!</b>")
+        finish_text = (
+            "🏁 <b>Auto-session finished!</b>\n"
+            "Next package will arrive at the scheduled time."
+        )
+        await message.answer(finish_text, parse_mode="HTML")
 
 # ============================================
 # O'YINNI TO'XTATISH
