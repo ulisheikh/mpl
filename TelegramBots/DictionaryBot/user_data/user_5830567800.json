@@ -94,6 +94,12 @@
             "33-savol so'zlari": {
                 "안녕차": "Salomcha"
             }
+        },
+        "writing": {
+            "1-savol so'zlari": {
+                "헌": "ds"
+                
+            }
         }
     }
 }

@@ -17,12 +17,22 @@ from aiogram.types import (
     ReplyKeyboardRemove
 )
 from database.db import UserDatabase
-
-
+from aiogram import F
+from aiogram import types
+from aiogram.filters import Command, CommandObject
 
 from config import BOT_TOKEN,DICTIONARY_BASE_PATH, USER_DB_PATH
 from utils.db_handler import DictionaryHandler
-
+import schedule
+import threading
+import time as time_module
+from utils.exam_generator import create_exam_word, split_words_into_groups
+from utils.exam_keyboards import (
+    get_exam_main_keyboard,
+    get_exam_topics_keyboard,
+    get_exam_sections_keyboard
+)
+from config import EXAM_AUTO_TIME, EXAM_WORDS_PER_FILE
 
 def get_text(lang: str, key: str, **kwargs) -> str:
     """Game matnini olish"""
@@ -45,6 +55,11 @@ class AutoPlayState(StatesGroup):
     selecting_topic = State()
     selecting_section = State()
     playing = State()
+
+class ExamState(StatesGroup):
+    selecting_mode = State()
+    selecting_topic = State()
+    selecting_section = State()
 
 # ============================================
 # 4. BOT VA ROUTER (FSM dan keyin)
@@ -176,7 +191,7 @@ ALL_TEXTS = {
         "game_select_mode": "🎮 <b>게임 모드 선택:</b>",
         "btn_general_mode": "🌍 일반 모드",
         "btn_custom_mode": "🎯 맞춤 모드",
-        "game_select_topic": "📚 <b>주제 선택:</b>",
+        "game_select_topic": "📚 <b>퇴픽 선택:</b>",
         "game_select_section": "📖 <b>섹션 선택:</b>\n<i>{topic}</i>",
         "game_select_section_only": "📖 <b>{topic}</b>\n\n섹션 선택:",
         "game_starting_custom": "🎮 <b>게임 시작!</b>\n\n📂 토픽: {topic}\n📖 섹션: {section}\n\n이 섹션에서 단어가 전송됩니다!",
@@ -205,13 +220,20 @@ ALL_TEXTS = {
 
         # ADMIN VA XATOLAR
         "no_words": "❌ 단어를 찾을 수 없습니다!",
-        "no_topics": "❌ 주제 없음!",
+        "no_topics": "❌ 토픽 없음!",
         "no_sections": "❌ 섹션 없음!",
         "admin_welcome": "✅ 관리자 패널에 오신 것을 환영합니다!",
         "admin_enter_password": "🔐 관리자 패널에 접근하려면 비밀번호를 입력하세요:",
         "admin_wrong_password": "❌ 잘못된 비밀번호!",
         "admin_user_blocked": "✅ 사용자가 차단되었습니다!",
-        "admin_user_unblocked": "✅ 사용자 차단이 해제되었습니다!"
+        "admin_user_unblocked": "✅ 사용자 차단이 해제되었습니다!",
+        
+        # EXAM (YANGI)
+        "exam_select_mode": "📝 시험 유형을 선택하세요:",
+        "exam_select_topic": "📚 토픽을 선택하세요:",
+        "exam_select_section": "📚 {topic_num}-토픽\n\n섹션을 선택하세요:",
+        "exam_file_sent": "✅ 파일이 전송되었습니다",
+        "exam_no_words": "❌ 단어가 없습니다!",
     }
 }
 
@@ -257,7 +279,7 @@ def get_main_keyboard(lang: str) -> ReplyKeyboardMarkup:
     keyboard = [
         [KeyboardButton(text="/start")],
         [KeyboardButton(text="/game"), KeyboardButton(text="/avtogame")],
-        [KeyboardButton(text="/bo'limlar")],
+        [KeyboardButton(text="/bo'limlar"), KeyboardButton(text="📝 시험 목록")],  # ← YANGI
         [KeyboardButton(text="/sozlamalar")]
     ]
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
@@ -1275,6 +1297,965 @@ async def admin_stats_handler(callback: CallbackQuery):
     )
     await callback.answer()
 
+# ============================================
+# EXAM TIZIMI - DEBUG VERSIYA
+# ============================================
+
+import os
+import random
+from aiogram import F, types
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile
+from aiogram.fsm.context import FSMContext
+
+
+# ============================================
+# 1. ASOSIY TUGMA - BO'LIMLAR RO'YXATI (DEBUG)
+# ============================================
+
+@router.message(F.text == "📝 시험 목록")
+async def cmd_exam_list(message: Message, state: FSMContext):
+    """Bo'limlarni ko'rsatish - DEBUG versiya"""
+    user_id = message.from_user.id
+    await state.clear()
+    
+    # DEBUG: Ma'lumotlarni tekshirish
+    print(f"\n{'='*50}")
+    print(f"USER ID: {user_id}")
+    
+    # 1. Barcha so'zlarni olish (asosiy metod)
+    all_words = dict_handler.get_all_words(user_id)
+    print(f"Jami so'zlar: {len(all_words) if all_words else 0}")
+    
+    if all_words:
+        print(f"Birinchi so'z: {all_words[0]}")
+    
+    # 2. Topiklar
+    topics = dict_handler.get_all_topics(user_id)
+    print(f"Topiklar: {topics}")
+    
+    # 3. User data
+    try:
+        user_data = dict_handler.load_user_data(user_id)
+        keys_text = list(user_data.keys()) if user_data else "BO'SH"
+        print(f"User data keys: {keys_text}")
+    except Exception as e:
+        print(f"User data xatosi: {e}")
+    
+    print(f"{'='*50}\n")
+    
+    # Agar hech narsa bo'lmasa
+    if not all_words:
+        await message.answer(
+            "❌ Sizda hali so'zlar yo'q!\n\n"
+            "Iltimos avval /game orqali so'z qo'shing."
+        )
+        return
+    
+    # YANGI YONDASHUV: Topiklar emas, balki BARCHA so'zlardan bo'limlarni olish
+    keyboard = []
+    sections_found = set()
+    
+    for word in all_words:
+        topic = word.get('topic', 'Unknown')
+        section = word.get('section', 'general')
+        
+        # Unique bo'limlarni saqlash
+        section_key = f"{topic}:{section}"
+        if section_key not in sections_found:
+            sections_found.add(section_key)
+            
+            # Bo'lim nomini koreyscha
+            section_map = {
+                'reading': '읽기',
+                'writing': '쓰기', 
+                'listening': '듣기',
+                'general': '일반'
+            }
+            section_korean = section_map.get(section, section)
+            
+            keyboard.append([
+                InlineKeyboardButton(
+                    text=f"📚 {topic} › {section_korean}",
+                    callback_data=f"exam_section:{topic}:{section}"
+                )
+            ])
+    
+    # Agar bo'limlar topilmasa
+    if not keyboard:
+        await message.answer(
+            "❌ Bo'limlar aniqlanmadi!\n\n"
+            "Debug info:\n"
+            f"• So'zlar: {len(all_words)}\n"
+            f"• Topiklar: {len(topics)}\n\n"
+            "So'z strukturasini tekshiring."
+        )
+        return
+    
+    # Random exam tugmasi
+    keyboard.append([
+        InlineKeyboardButton(
+            text="🎲 Barcha so'zlardan (Random)",
+            callback_data="exam_random_all"
+        )
+    ])
+    
+    await message.answer(
+        f"📚 시험 섹션을 선택하세요:\n"
+        f"(Mavjud bo'limlar: {len(sections_found)})\n\n"
+        f"Imtihon bo'limini tanlang:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
+
+
+# ============================================
+# 2. BO'LIM TANLANDI - YO'NALISH SO'RASH
+# ============================================
+
+@router.callback_query(F.data.startswith("exam_section:"))
+async def exam_section_selected(callback: CallbackQuery, state: FSMContext):
+    """Bo'lim tanlandi - yo'nalish so'rash"""
+    parts = callback.data.split(":")
+    topic = parts[1]
+    section = parts[2]
+    
+    user_id = callback.from_user.id
+    
+    # DEBUG: So'zlar borligini tekshirish
+    all_words = dict_handler.get_all_words(user_id)
+    filtered_words = [w for w in all_words if w.get('topic') == topic and w.get('section') == section]
+    
+    print(f"\n{'='*50}")
+    print(f"Bo'lim tanlandi: {topic} › {section}")
+    print(f"Filtrlangan so'zlar: {len(filtered_words)}")
+    print(f"{'='*50}\n")
+    
+    if not filtered_words:
+        await callback.answer("❌ Bu bo'limda so'zlar topilmadi!", show_alert=True)
+        return
+    
+    # State ga saqlaymiz
+    await state.update_data(exam_topic=topic, exam_section=section)
+    
+    # Bo'lim nomini koreyscha
+    section_map = {
+        'reading': '읽기',
+        'writing': '쓰기',
+        'listening': '듣기',
+        'general': '일반'
+    }
+    section_korean = section_map.get(section, section)
+    
+    # Yo'nalish tanlash tugmalari
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="🇰🇷 한국어 ➔ 🇺🇿 우즈베크어",
+                callback_data="exam_mode:kr_to_uz"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="🇺🇿 우즈베크어 ➔ 🇰🇷 한국어", 
+                callback_data="exam_mode:uz_to_kr"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="◀️ Orqaga",
+                callback_data="exam_back_to_sections"
+            )
+        ]
+    ])
+    
+    await callback.message.edit_text(
+        f"📚 {topic} › {section_korean}\n"
+        f"📊 {len(filtered_words)}개 단어\n\n"
+        f"🔄 시험 형식을 선택하세요:\n"
+        f"(Imtihon formatini tanlang:)",
+        reply_markup=keyboard
+    )
+    await callback.answer()
+
+
+# ============================================
+# 3. YO'NALISH TANLANDI - FAYL YARATISH
+# ============================================
+
+@router.callback_query(F.data.startswith("exam_mode:"))
+async def exam_mode_selected(callback: CallbackQuery, state: FSMContext):
+    """Yo'nalish tanlandi - fayl yaratish"""
+    mode = callback.data.split(":")[1]
+    
+    data = await state.get_data()
+    topic = data.get('exam_topic')
+    section = data.get('exam_section')
+    user_id = callback.from_user.id
+    
+    if not topic or not section:
+        await callback.answer("❌ Xatolik yuz berdi!", show_alert=True)
+        await state.clear()
+        return
+    
+    await callback.message.edit_text("⏳ 파일을 준비 중입니다...\n(Fayl tayyorlanmoqda...)")
+    
+    try:
+        # So'zlarni olish (to'g'ridan-to'g'ri get_all_words dan)
+        all_words = dict_handler.get_all_words(user_id)
+        
+        # Filtrlash
+        words = []
+        for w in all_words:
+            if w.get('topic') == topic and w.get('section') == section:
+                words.append((w['korean'], w['uzbek']))
+        
+        print(f"\n{'='*50}")
+        print(f"Fayl yaratish: {topic} › {section}")
+        print(f"Topilgan so'zlar: {len(words)}")
+        print(f"Mode: {mode}")
+        print(f"{'='*50}\n")
+        
+        if not words:
+            await callback.message.edit_text(
+                "❌ Bu bo'limda so'zlar topilmadi!\n\n"
+                "Debug info:\n"
+                f"• Topic: {topic}\n"
+                f"• Section: {section}\n"
+                f"• Jami so'zlar: {len(all_words)}"
+            )
+            await state.clear()
+            return
+        
+        # Random aralashtirish
+        random.shuffle(words)
+        
+        # Bo'lim nomini koreyscha
+        section_map = {
+            'reading': '읽기',
+            'writing': '쓰기',
+            'listening': '듣기',
+            'general': '일반'
+        }
+        section_korean = section_map.get(section, section)
+        
+        # Manzil
+        location = f"{topic} › {section_korean}"
+        
+        # Word fayl yaratish
+        filepath = create_exam_word(words[:25], location=location, mode=mode)
+        
+        # Yuborish
+        file = FSInputFile(filepath)
+        mode_text = "🇰🇷 ➔ 🇺🇿" if mode == "kr_to_uz" else "🇺🇿 ➔ 🇰🇷"
+        
+        await callback.message.answer_document(
+            document=file,
+            caption=f"✅ 시험지가 준비되었습니다!\n\n"
+                   f"📂 {location}\n"
+                   f"🔄 {mode_text}\n"
+                   f"📊 {len(words[:25])}개 단어"
+        )
+        
+        await callback.message.delete()
+        
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        
+        await state.clear()
+        
+    except Exception as e:
+        print(f"Exam error: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        await callback.message.edit_text(
+            f"❌ Xatolik yuz berdi!\n\n"
+            f"Error: {str(e)}"
+        )
+        await state.clear()
+
+
+# ============================================
+# 4. ORQAGA QAYTISH
+# ============================================
+
+@router.callback_query(F.data == "exam_back_to_sections")
+async def exam_back_to_sections(callback: CallbackQuery, state: FSMContext):
+    """Bo'limlar ro'yxatiga qaytish"""
+    user_id = callback.from_user.id
+    await state.clear()
+    
+    all_words = dict_handler.get_all_words(user_id)
+    
+    keyboard = []
+    sections_found = set()
+    
+    for word in all_words:
+        topic = word.get('topic', 'Unknown')
+        section = word.get('section', 'general')
+        
+        section_key = f"{topic}:{section}"
+        if section_key not in sections_found:
+            sections_found.add(section_key)
+            
+            section_map = {
+                'reading': '읽기',
+                'writing': '쓰기',
+                'listening': '듣기',
+                'general': '일반'
+            }
+            section_korean = section_map.get(section, section)
+            
+            keyboard.append([
+                InlineKeyboardButton(
+                    text=f"📚 {topic} › {section_korean}",
+                    callback_data=f"exam_section:{topic}:{section}"
+                )
+            ])
+    
+    keyboard.append([
+        InlineKeyboardButton(
+            text="🎲 Barcha so'zlardan (Random)",
+            callback_data="exam_random_all"
+        )
+    ])
+    
+    await callback.message.edit_text(
+        "📚 시험 섹션을 선택하세요:\n(Imtihon bo'limini tanlang:)",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
+    await callback.answer()
+
+
+# ============================================
+# 5. RANDOM EXAM
+# ============================================
+
+@router.callback_query(F.data == "exam_random_all")
+async def exam_random_handler(callback: CallbackQuery, state: FSMContext):
+    """Random exam - barcha so'zlardan"""
+    user_id = callback.from_user.id
+    await state.clear()
+    
+    all_words_data = dict_handler.get_all_words(user_id)
+    
+    if not all_words_data:
+        await callback.answer("❌ So'zlar topilmadi!", show_alert=True)
+        return
+    
+    all_words = [(w['korean'], w['uzbek']) for w in all_words_data]
+    random.shuffle(all_words)
+    
+    await state.update_data(exam_random_words=all_words[:25])
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="🇰🇷 한국어 ➔ 🇺🇿 우즈베크어",
+                callback_data="exam_random_mode:kr_to_uz"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="🇺🇿 우즈베크어 ➔ 🇰🇷 한국어",
+                callback_data="exam_random_mode:uz_to_kr"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="◀️ Orqaga",
+                callback_data="exam_back_to_sections"
+            )
+        ]
+    ])
+    
+    await callback.message.edit_text(
+        f"🎲 Tasodifiy imtihon\n\n"
+        f"📊 {len(all_words[:25])}개 단어\n\n"
+        f"🔄 형식을 선택하세요:",
+        reply_markup=keyboard
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("exam_random_mode:"))
+async def exam_random_mode_selected(callback: CallbackQuery, state: FSMContext):
+    """Random exam yo'nalishi"""
+    mode = callback.data.split(":")[1]
+    data = await state.get_data()
+    words = data.get('exam_random_words', [])
+    
+    if not words:
+        await callback.answer("❌ Xatolik!", show_alert=True)
+        return
+    
+    await callback.message.edit_text("⏳ 파일을 준비 중입니다...")
+    
+    try:
+        filepath = create_exam_word(words, location="Random", mode=mode)
+        
+        file = FSInputFile(filepath)
+        mode_text = "🇰🇷 ➔ 🇺🇿" if mode == "kr_to_uz" else "🇺🇿 ➔ 🇰🇷"
+        
+        await callback.message.answer_document(
+            document=file,
+            caption=f"✅ 랜덤 시험!\n\n🔄 {mode_text}\n📊 {len(words)}개"
+        )
+        
+        await callback.message.delete()
+        
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        
+        await state.clear()
+        
+    except Exception as e:
+        print(f"Random exam error: {e}")
+        await callback.message.edit_text(f"❌ Xatolik: {str(e)}")
+        await state.clear()
+
+
+# ============================================
+# 6. AVTOMATIK EXAM (05:00)
+# ============================================
+
+def check_new_words_last_24h(user_id: int) -> bool:
+    """Oxirgi 24 soatda yangi so'zlar qo'shilganmi?"""
+    user_file = dict_handler.get_user_dict_file(user_id)
+    
+    if not os.path.exists(user_file):
+        return False
+    
+    file_mtime = os.path.getmtime(user_file)
+    time_diff = time_module.time() - file_mtime
+    
+    return time_diff <= 86400
+
+
+async def send_auto_exam():
+    """Har kuni 05:00 da avtomatik exam"""
+    all_users = await user_db.get_all_users()
+    
+    for user in all_users:
+        user_id = user['user_id']
+        
+        if not check_new_words_last_24h(user_id):
+            continue
+        
+        all_words_data = dict_handler.get_all_words(user_id)
+        
+        if not all_words_data:
+            continue
+        
+        all_words = [(w['korean'], w['uzbek']) for w in all_words_data]
+        groups = split_words_into_groups(all_words, EXAM_WORDS_PER_FILE)
+        
+        msg = "📚 시험 시간!\n\n"
+        msg += f"✅ 새 단어: {len(all_words)}개\n"
+        msg += f"📄 옵션: {len(groups)}개\n\n"
+        
+        try:
+            await bot.send_message(user_id, msg)
+            
+            for idx, group in enumerate(groups, 1):
+                filepath = create_exam_word(group, location=None, mode="kr_to_uz")
+                file = FSInputFile(filepath)
+                await bot.send_document(
+                    user_id,
+                    document=file,
+                    caption=f"📝 옵션 {idx}: {len(group)}개 단어"
+                )
+                os.remove(filepath)
+        
+        except Exception as e:
+            print(f"Auto exam error for {user_id}: {e}")
+
+
+def schedule_exam_checker():
+    """05:00 scheduler"""
+    import schedule
+    
+    schedule.every().day.at(EXAM_AUTO_TIME).do(
+        lambda: asyncio.create_task(send_auto_exam())
+    )
+    
+    while True:
+        schedule.run_pending()
+        time_module.sleep(60)
+
+
+# ============================================
+# DEBUG UCHUN QO'SHIMCHA KOMANDA
+# ============================================
+
+@router.message(Command("checkwords"))
+async def debug_check_words(message: Message):
+    """So'zlarni tekshirish (debug)"""
+    user_id = message.from_user.id
+    
+    all_words = dict_handler.get_all_words(user_id)
+    
+    if not all_words:
+        await message.answer("❌ So'zlar topilmadi!")
+        return
+    
+    # Statistika
+    topics = {}
+    for w in all_words:
+        topic = w.get('topic', 'Unknown')
+        section = w.get('section', 'general')
+        
+        if topic not in topics:
+            topics[topic] = {}
+        if section not in topics[topic]:
+            topics[topic][section] = 0
+        topics[topic][section] += 1
+    
+    # Matn
+    text = f"📊 So'zlar statistikasi:\n\n"
+    text += f"Jami: {len(all_words)}\n\n"
+    
+    for topic, sections in topics.items():
+        text += f"📚 {topic}:\n"
+        for section, count in sections.items():
+            text += f"  • {section}: {count} ta\n"
+        text += "\n"
+    
+    await message.answer(text)
+
+# ============================================
+# EXAM TIZIMI - TO'LIQ KOD (BOSHQA KODLARNI O'CHIRING!)
+# ============================================
+# Bu kodlarni ishlatishdan oldin eski exam handlerlarni BUTUNLAY o'chiring!
+
+# import os
+# import random
+# from aiogram import F, types
+# from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile
+# from aiogram.fsm.context import FSMContext
+
+
+# ============================================
+# 1. ASOSIY TUGMA - BO'LIMLAR RO'YXATI
+# ============================================
+
+@router.message(F.text == "📝 시험 목록")
+async def cmd_exam_list(message: Message, state: FSMContext):
+    """Bo'limlarni ko'rsatish (asosiy kirish nuqtasi)"""
+    user_id = message.from_user.id
+    await state.clear()
+    
+    # Barcha mavjud topiklar va bo'limlarni olish
+    topics = dict_handler.get_all_topics(user_id)
+    
+    if not topics:
+        await message.answer("❌ Lug'atingizda ma'lumot topilmadi!")
+        return
+    
+    # Bo'limlar ro'yxatini yaratish
+    keyboard = []
+    
+    for topic in topics:
+        sections = dict_handler.get_topic_sections(user_id, topic)
+        for section in sections:
+            # Bo'lim nomini koreyscha
+            section_map = {
+                'reading': '읽기',
+                'writing': '쓰기', 
+                'listening': '듣기'
+            }
+            section_korean = section_map.get(section, section)
+            
+            # Har bir bo'lim uchun tugma
+            keyboard.append([
+                InlineKeyboardButton(
+                    text=f"📚 {topic} › {section_korean}",
+                    callback_data=f"exam_section:{topic}:{section}"
+                )
+            ])
+    
+    # Agar bo'limlar topilmasa
+    if not keyboard:
+        await message.answer("❌ Bo'limlar topilmadi!")
+        return
+    
+    # Qo'shimcha: Random exam tugmasi (ixtiyoriy)
+    keyboard.append([
+        InlineKeyboardButton(
+            text="🎲 Tasodifiy (Random)",
+            callback_data="exam_random_all"
+        )
+    ])
+    
+    await message.answer(
+        "📚 시험 섹션을 선택하세요:\n(Imtihon bo'limini tanlang:)",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
+
+
+# ============================================
+# 2. BO'LIM TANLANDI - YO'NALISH SO'RASH
+# ============================================
+
+@router.callback_query(F.data.startswith("exam_section:"))
+async def exam_section_selected(callback: CallbackQuery, state: FSMContext):
+    """Bo'lim tanlandi - endi yo'nalish (mode) so'raymiz"""
+    # Data formati: exam_section:Topik-35:reading
+    parts = callback.data.split(":")
+    topic = parts[1]
+    section = parts[2]
+    
+    # State ga saqlaymiz (keyingi bosqichda kerak bo'ladi)
+    await state.update_data(exam_topic=topic, exam_section=section)
+    
+    # Bo'lim nomini koreyscha
+    section_map = {
+        'reading': '읽기',
+        'writing': '쓰기',
+        'listening': '듣기'
+    }
+    section_korean = section_map.get(section, section)
+    
+    # Yo'nalish tanlash tugmalari
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="🇰🇷 한국어 ➔ 🇺🇿 우즈베크어",
+                callback_data="exam_mode:kr_to_uz"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="🇺🇿 우즈베크어 ➔ 🇰🇷 한국어", 
+                callback_data="exam_mode:uz_to_kr"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="◀️ Orqaga",
+                callback_data="exam_back_to_sections"
+            )
+        ]
+    ])
+    
+    await callback.message.edit_text(
+        f"📚 {topic} › {section_korean}\n\n"
+        f"🔄 시험 형식을 선택하세요:\n"
+        f"(Imtihon formatini tanlang:)",
+        reply_markup=keyboard
+    )
+    await callback.answer()
+
+
+# ============================================
+# 3. YO'NALISH TANLANDI - FAYL YARATISH
+# ============================================
+
+@router.callback_query(F.data.startswith("exam_mode:"))
+async def exam_mode_selected(callback: CallbackQuery, state: FSMContext):
+    """Yo'nalish tanlandi - fayl yaratamiz va yuboramiz"""
+    # Mode olish
+    mode = callback.data.split(":")[1]  # kr_to_uz yoki uz_to_kr
+    
+    # State dan ma'lumotlarni olish
+    data = await state.get_data()
+    topic = data.get('exam_topic')
+    section = data.get('exam_section')
+    user_id = callback.from_user.id
+    
+    if not topic or not section:
+        await callback.answer("❌ Xatolik yuz berdi!", show_alert=True)
+        await state.clear()
+        return
+    
+    # Kutish xabari
+    await callback.message.edit_text("⏳ 파일을 준비 중입니다...\n(Fayl tayyorlanmoqda...)")
+    
+    try:
+        # So'zlarni olish
+        user_data = dict_handler.load_user_data(user_id)
+        
+        if topic not in user_data or section not in user_data[topic]:
+            await callback.message.edit_text("❌ Bu bo'limda so'zlar topilmadi!")
+            await state.clear()
+            return
+        
+        # Barcha so'zlarni yig'ish
+        words = []
+        for chapter_data in user_data[topic][section].values():
+            for korean, uzbek in chapter_data.items():
+                words.append((korean, uzbek))
+        
+        if not words:
+            await callback.message.edit_text("❌ So'zlar topilmadi!")
+            await state.clear()
+            return
+        
+        # Random aralashtirish
+        random.shuffle(words)
+        
+        # Bo'lim nomini koreyscha
+        section_map = {
+            'reading': '읽기',
+            'writing': '쓰기',
+            'listening': '듣기'
+        }
+        section_korean = section_map.get(section, section)
+        
+        # Manzil (location)
+        location = f"{topic} › {section_korean}"
+        
+        # Word fayl yaratish (maksimal 25 ta so'z)
+        filepath = create_exam_word(words[:25], location=location, mode=mode)
+        
+        # Faylni yuborish
+        file = FSInputFile(filepath)
+        
+        mode_text = "🇰🇷 ➔ 🇺🇿" if mode == "kr_to_uz" else "🇺🇿 ➔ 🇰🇷"
+        
+        await callback.message.answer_document(
+            document=file,
+            caption=f"✅ 시험지가 준비되었습니다!\n\n"
+                   f"📂 {location}\n"
+                   f"🔄 {mode_text}\n"
+                   f"📊 {len(words[:25])}개 단어"
+        )
+        
+        # Kutish xabarini o'chirish
+        await callback.message.delete()
+        
+        # Faylni serverdan o'chirish
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        
+        await state.clear()
+        
+    except Exception as e:
+        print(f"Exam file creation error: {e}")
+        await callback.message.edit_text(
+            f"❌ 오류가 발생했습니다.\n(Xatolik yuz berdi)\n\n"
+            f"Iltimos qayta urinib ko'ring."
+        )
+        await state.clear()
+
+
+# ============================================
+# 4. ORQAGA QAYTISH (BO'LIMLAR RO'YXATIGA)
+# ============================================
+
+@router.callback_query(F.data == "exam_back_to_sections")
+async def exam_back_to_sections(callback: CallbackQuery, state: FSMContext):
+    """Bo'limlar ro'yxatiga qaytish"""
+    user_id = callback.from_user.id
+    await state.clear()
+    
+    # Bo'limlar ro'yxatini qayta ko'rsatish
+    topics = dict_handler.get_all_topics(user_id)
+    
+    keyboard = []
+    for topic in topics:
+        sections = dict_handler.get_topic_sections(user_id, topic)
+        for section in sections:
+            section_map = {
+                'reading': '읽기',
+                'writing': '쓰기',
+                'listening': '듣기'
+            }
+            section_korean = section_map.get(section, section)
+            
+            keyboard.append([
+                InlineKeyboardButton(
+                    text=f"📚 {topic} › {section_korean}",
+                    callback_data=f"exam_section:{topic}:{section}"
+                )
+            ])
+    
+    # Random exam tugmasi
+    keyboard.append([
+        InlineKeyboardButton(
+            text="🎲 Tasodifiy (Random)",
+            callback_data="exam_random_all"
+        )
+    ])
+    
+    await callback.message.edit_text(
+        "📚 시험 섹션을 선택하세요:\n(Imtihon bo'limini tanlang:)",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
+    await callback.answer()
+
+
+# ============================================
+# 5. RANDOM EXAM (IXTIYORIY)
+# ============================================
+
+@router.callback_query(F.data == "exam_random_all")
+async def exam_random_handler(callback: CallbackQuery, state: FSMContext):
+    """Random exam - barcha so'zlardan tasodifiy"""
+    user_id = callback.from_user.id
+    await state.clear()
+    
+    # Barcha so'zlarni olish
+    all_words_data = dict_handler.get_all_words(user_id)
+    
+    if not all_words_data:
+        await callback.answer("❌ So'zlar topilmadi!", show_alert=True)
+        return
+    
+    # Formatga solish
+    all_words = [(w['korean'], w['uzbek']) for w in all_words_data]
+    random.shuffle(all_words)
+    
+    # Yo'nalish so'rash (state ga saqlaymiz)
+    await state.update_data(exam_random_words=all_words[:25])
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="🇰🇷 한국어 ➔ 🇺🇿 우즈베크어",
+                callback_data="exam_random_mode:kr_to_uz"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="🇺🇿 우즈베크어 ➔ 🇰🇷 한국어",
+                callback_data="exam_random_mode:uz_to_kr"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="◀️ Orqaga",
+                callback_data="exam_back_to_sections"
+            )
+        ]
+    ])
+    
+    await callback.message.edit_text(
+        f"🎲 Tasodifiy imtihon\n\n"
+        f"📊 {len(all_words[:25])}개 단어\n\n"
+        f"🔄 형식을 선택하세요:",
+        reply_markup=keyboard
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("exam_random_mode:"))
+async def exam_random_mode_selected(callback: CallbackQuery, state: FSMContext):
+    """Random exam yo'nalishi tanlandi"""
+    mode = callback.data.split(":")[1]
+    data = await state.get_data()
+    words = data.get('exam_random_words', [])
+    
+    if not words:
+        await callback.answer("❌ Xatolik!", show_alert=True)
+        return
+    
+    await callback.message.edit_text("⏳ 파일을 준비 중입니다...")
+    
+    try:
+        filepath = create_exam_word(words, location="Random", mode=mode)
+        
+        file = FSInputFile(filepath)
+        mode_text = "🇰🇷 ➔ 🇺🇿" if mode == "kr_to_uz" else "🇺🇿 ➔ 🇰🇷"
+        
+        await callback.message.answer_document(
+            document=file,
+            caption=f"✅ 랜덤 시험!\n\n🔄 {mode_text}\n📊 {len(words)}개"
+        )
+        
+        await callback.message.delete()
+        
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        
+        await state.clear()
+        
+    except Exception as e:
+        print(f"Random exam error: {e}")
+        await callback.message.edit_text("❌ Xatolik yuz berdi!")
+        await state.clear()
+
+
+# ============================================
+# 6. AVTOMATIK EXAM YUBORISH (05:00)
+# ============================================
+
+def check_new_words_last_24h(user_id: int) -> bool:
+    """Oxirgi 24 soatda yangi so'zlar qo'shilganmi?"""
+    user_file = dict_handler.get_user_dict_file(user_id)
+    
+    if not os.path.exists(user_file):
+        return False
+    
+    file_mtime = os.path.getmtime(user_file)
+    time_diff = time_module.time() - file_mtime
+    
+    return time_diff <= 86400  # 24 soat
+
+
+async def send_auto_exam():
+    """Har kuni 05:00 da avtomatik exam yuborish"""
+    # Barcha userlarni olish
+    all_users = await user_db.get_all_users()
+    
+    for user in all_users:
+        user_id = user['user_id']
+        
+        # Oxirgi 24 soatda yangi so'zlar bormi?
+        if not check_new_words_last_24h(user_id):
+            continue
+        
+        # Barcha so'zlarni olish
+        all_words_data = dict_handler.get_all_words(user_id)
+        
+        if not all_words_data:
+            continue
+        
+        # So'zlarni formatga solish
+        all_words = [(w['korean'], w['uzbek']) for w in all_words_data]
+        
+        # Guruhga bo'lish (har birida 25 ta)
+        groups = split_words_into_groups(all_words, EXAM_WORDS_PER_FILE)
+        
+        # Xabar (한국어)
+        msg = "📚 시험 시간!\n\n"
+        msg += f"✅ 새 단어: {len(all_words)}개\n"
+        msg += f"📄 옵션: {len(groups)}개\n\n"
+        
+        try:
+            await bot.send_message(user_id, msg)
+            
+            # Har bir guruhni fayl sifatida yuborish
+            for idx, group in enumerate(groups, 1):
+                # Default mode: kr_to_uz
+                filepath = create_exam_word(group, location=None, mode="kr_to_uz")
+                
+                file = FSInputFile(filepath)
+                await bot.send_document(
+                    user_id,
+                    document=file,
+                    caption=f"📝 옵션 {idx}: {len(group)}개 단어"
+                )
+                
+                os.remove(filepath)
+        
+        except Exception as e:
+            print(f"Error sending exam to {user_id}: {e}")
+
+
+def schedule_exam_checker():
+    """Soat 05:00 da tekshiruvchi"""
+    import schedule
+    
+    schedule.every().day.at(EXAM_AUTO_TIME).do(
+        lambda: asyncio.create_task(send_auto_exam())
+    )
+    
+    while True:
+        schedule.run_pending()
+        time_module.sleep(60)
+
+
+
 
 # ==================== MAIN ====================
 
@@ -1282,11 +2263,13 @@ async def main():
     await user_db.init_db()
     dp.include_router(router)
     
-    # Avtomatik so'z yuborish taskini ishga tushirish
+    # Avtomatik so'z yuborish
     asyncio.create_task(send_auto_words())
     
     print("✅ Bot ishga tushdi!")
-    print("⏰ Avtomatik so'z yuborish faollashtirildi (har 15 daqiqada)")
+    print("⏰ Avtomatik so'z yuborish faollashtirildi")
+    print("📝 Exam tizimi faollashtirildi (har kuni 05:00)")
+    
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
