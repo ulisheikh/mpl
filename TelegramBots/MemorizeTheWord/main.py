@@ -279,7 +279,7 @@ def get_main_keyboard(lang: str) -> ReplyKeyboardMarkup:
     keyboard = [
         [KeyboardButton(text="/start")],
         [KeyboardButton(text="/game"), KeyboardButton(text="/avtogame")],
-        [KeyboardButton(text="/bo'limlar"), KeyboardButton(text="📝 시험 목록")],  # ← YANGI
+        [KeyboardButton(text="/bo'limlar"), KeyboardButton(text="/exam_doc")],  # ← YANGI
         [KeyboardButton(text="/sozlamalar")]
     ]
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
@@ -1312,7 +1312,7 @@ from aiogram.fsm.context import FSMContext
 # 1. ASOSIY TUGMA - BO'LIMLAR RO'YXATI (DEBUG)
 # ============================================
 
-@router.message(F.text == "📝 시험 목록")
+@router.message(F.text == "/exam_doc")
 async def cmd_exam_list(message: Message, state: FSMContext):
     """Bo'limlarni ko'rsatish - DEBUG versiya"""
     user_id = message.from_user.id
@@ -1838,7 +1838,7 @@ async def debug_check_words(message: Message):
 # 1. ASOSIY TUGMA - BO'LIMLAR RO'YXATI
 # ============================================
 
-@router.message(F.text == "📝 시험 목록")
+@router.message(F.text == "/exam_doc")
 async def cmd_exam_list(message: Message, state: FSMContext):
     """Bo'limlarni ko'rsatish (asosiy kirish nuqtasi)"""
     user_id = message.from_user.id
