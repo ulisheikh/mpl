@@ -69,19 +69,12 @@ def get_main_keyboard(uid):
 
 
 def get_settings_keyboard(uid, is_admin=False):
-    """Sozlamalar klaviaturasi"""
+    """Sozlamalar klaviaturasi - Yangilangan"""
     markup = InlineKeyboardMarkup()
     
-    # Tizim holati (faqat admin)
-    if is_admin:
-        markup.row(
-            InlineKeyboardButton(
-                text="📊 " + get_text(uid, 'status'),
-                callback_data="settings_status"
-            )
-        )
+    # Status tugmasi olib tashlandi (Endi u /start xabarida chiqadi)
     
-    # Foydalanuvchilar (faqat admin)
+    # Foydalanuvchilar (faqat admin uchun qoladi)
     if is_admin:
         markup.row(
             InlineKeyboardButton(

@@ -795,7 +795,8 @@ async def process_auto_answer(message: Message, state: FSMContext):
     data = await state.get_data()
     word = data.get('current_word')
 
-    if not word: return
+    if not word: 
+        return
 
     # 1. Javobni tekshirish
     user_answer = message.text.strip().lower()
@@ -803,14 +804,17 @@ async def process_auto_answer(message: Message, state: FSMContext):
     
     if user_answer == correct_answer:
         await user_db.update_statistics(user_id, True, 0)
-        await message.answer(f"✅ <b>To'g'ri!</b> (Avtomatik)", parse_mode="HTML")
+        if lang == "uz":
+            await message.answer(f"✅ <b>To'g'ri!</b> (Avtomatik)", parse_mode="HTML")
+        else:
+            await message.answer(f"✅ <b>정답!</b> (자동)", parse_mode="HTML")
     else:
         await user_db.update_statistics(user_id, False, 0)
         await message.answer(f"❌ <b>Xato!</b> 🇰🇷: <code>{word['korean']}</code>", parse_mode="HTML")
 
     # 2. Keyingi savolga o'tish mantiqi
     current_step = data.get('auto_current_step', 1)
-    max_steps = 10 # Siz xohlagan 10 ta savol
+    max_steps = 10
 
     if current_step < max_steps:
         # Keyingi savolni olish
@@ -819,16 +823,42 @@ async def process_auto_answer(message: Message, state: FSMContext):
             new_step = current_step + 1
             await state.update_data(current_word=next_word, auto_current_step=new_step)
             
-            await message.answer(
-                f"🤖 <b>(AVTOMATIK SAVOL)</b> {new_step}/{max_steps}\n\n" +
-                get_text(lang, "auto_question", 
-                         uzbek=next_word['uzbek'], topic=next_word['topic']),
-                parse_mode="HTML"
-            )
+            # ✅ TO'G'RI formatda matn
+            if lang == "uz":
+                text = (
+                    f"🤖 <b>(AVTOMATIK SAVOL)</b> {new_step}/10\n\n"
+                    f"⏰ So'z yodlash vaqti!\n\n"
+                    f"Sen bu so'zni bilasanmi? 🤔\n\n"
+                    f">>> <b>{next_word['uzbek']}</b>\n\n"
+                    f"📍 {next_word.get('topic', '...')} › {next_word.get('section', '...')} › {next_word.get('chapter', '...')}\n"
+                    f"📝 Koreys tilida yozing:"
+                )
+            else:
+                text = (
+                    f"🤖 <b>(자동질문 모드)</b> {new_step}/10\n\n"
+                    f"⏰ <b>단어 학습 시간!</b>\n"
+                    f"📊 <b>질문: {new_step}/10</b>\n\n"
+                    f"<i>이 단어를 알고 있나요?</i> 🤔\n\n"
+                    f">>> <i>{next_word['uzbek']}</i>\n\n"
+                    f"📍 {next_word.get('topic', '...')} › {next_word.get('section', '...')} › {next_word.get('chapter', '...')}\n"
+                    f"📝 한국어로 작성하세요:"
+                )
+            
+            await message.answer(text, parse_mode="HTML")
     else:
         # 10 ta savol tugadi
         await state.update_data(current_word=None)
-        await message.answer(f"🏁 <b>Navbatdagi 10 talik paket tugadi!</b>\nKeyingi savollar belgilangan vaqtdan so'ng yuboriladi.")
+        if lang == "uz":
+            await message.answer(
+                f"🎉 <b>Navbatdagi 10 talik paket tugadi!</b>\n\n"
+                f"Keyingi savollar belgilangan vaqtdan so'ng yuboriladi."
+            )
+        else:
+            await message.answer(
+                f"🎉 <b>10문제 완료!</b>\n\n"
+                f"다음 문제는 설정된 시간에 전송됩니다."
+            )
+
 # ============================================
 # O'YINNI TO'XTATISH
 # ============================================
@@ -933,7 +963,8 @@ async def auto_custom_mode(callback: CallbackQuery, state: FSMContext):
     await state.set_state(AutoPlayState.selecting_topic)
     await callback.message.edit_text(
         get_text(lang, "game_select_topic"),
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode="HTML"
     )
     await callback.answer()
 
@@ -1021,15 +1052,27 @@ async def send_auto_words():
                                 last_auto_sent=now, 
                                 auto_current_step=1
                             )
-                            
-                            text = get_text(
-                                lang, "auto_question", 
-                                uzbek=word['uzbek'], 
-                                topic=word.get('topic', '...'),
-                                section=word.get('section', '...'),
-                                chapter=word.get('chapter', '...'),
-                                count=1
-                            )
+        
+                            # ✅ TO'G'RI (YANGI):
+                            if lang == "uz":
+                                text = (
+                                    f"🤖 <b>(AVTOMATIK SAVOL)</b> 1/10\n\n"
+                                    f"⏰ So'z yodlash vaqti!\n\n"
+                                    f"Sen bu so'zni bilasanmi? 🤔\n\n"
+                                    f">>> <b>{word['uzbek']}</b>\n\n"
+                                    f"📍 {word.get('topic', '...')} › {word.get('section', '...')} › {word.get('chapter', '...')}\n"
+                                    f"📝 Koreys tilida yozing:"
+                                )
+                            else:
+                                text = (
+                                    f"🤖 <b>(자동질문 모드)</b> 1/10\n\n"
+                                    f"⏰ <b>단어 학습 시간!</b>\n"
+                                    f"📊 <b>질문: 1/10</b>\n\n"
+                                    f"<i>이 단어를 알고 있나요?</i> 🤔\n\n"
+                                    f">>> <i>{word['uzbek']}</i>\n\n"
+                                    f"📍 {word.get('topic', '...')} › {word.get('section', '...')} › {word.get('chapter', '...')}\n"
+                                    f"📝 한국어로 작성하세요:"
+                                )
                             
                             await bot.send_message(user_id, text, parse_mode="HTML")
                             

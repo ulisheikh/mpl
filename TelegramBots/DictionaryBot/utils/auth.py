@@ -81,24 +81,34 @@ def save_sessions(sessions):
 def initialize_passwords():
     """Default parollarni o'rnatish"""
     passwords = load_passwords()
-    if not passwords:
+    # Agar fayl bo'sh bo'lsa yoki kerakli kalitlar bo'lmasa
+    if not passwords or 'user_password' not in passwords:
         passwords = {
-            'user': DEFAULT_USER_PASSWORD,
-            'admin': DEFAULT_ADMIN_PASSWORD
+            'user_password': DEFAULT_USER_PASSWORD,
+            'admin_password': DEFAULT_ADMIN_PASSWORD
         }
         save_passwords(passwords)
     return passwords
 
 def verify_password(user_id, password):
-    """Parolni tekshirish"""
     passwords = load_passwords()
     
-    if password == passwords.get('admin', DEFAULT_ADMIN_PASSWORD):
+    # 1. Fayldagi parollarni olamiz
+    file_admin_pwd = passwords.get('admin_password')
+    file_user_pwd = passwords.get('user_password')
+
+    # 2. ADMINni tekshirish
+    # Agar faylda parol bo'lsa, faqat o'shani tekshir. Bo'lmasa Configdagini ol.
+    target_admin = file_admin_pwd if file_admin_pwd else DEFAULT_ADMIN_PASSWORD
+    if str(password) == str(target_admin):
         return 'admin'
-    elif password == passwords.get('user', DEFAULT_USER_PASSWORD):
+
+    # 3. USERni tekshirish
+    target_user = file_user_pwd if file_user_pwd else DEFAULT_USER_PASSWORD
+    if str(password) == str(target_user):
         return 'user'
-    else:
-        return None
+
+    return None
 
 def is_user_blocked(user_id):
     """Foydalanuvchi bloklangan yoki yo'qligini tekshirish"""
@@ -125,9 +135,12 @@ def add_login_attempt(user_id):
 def login_user(user_id, role):
     """Foydalanuvchini tizimga kiritish"""
     global USER_SESSIONS
+    
+    # ✅ Timestamp qo'shish
     USER_SESSIONS[user_id] = {
         'role': role,
-        'logged_in': True
+        'logged_in': True,
+        'timestamp': time.time()  # ← YANGI!
     }
     
     # Sessiyani saqlash
@@ -138,6 +151,8 @@ def login_user(user_id, role):
     # Login urinishlarni tozalash
     if user_id in LOGIN_ATTEMPTS:
         LOGIN_ATTEMPTS[user_id] = 0
+    
+    print(f"✅ User {user_id}: Login qildi ({role})")
 
 def logout_user(user_id):
     """Foydalanuvchini tizimdan chiqarish"""
@@ -152,16 +167,56 @@ def logout_user(user_id):
 
 def is_logged_in(user_id):
     """Foydalanuvchi tizimga kirgan yoki yo'qligini tekshirish"""
-    # Global sessiyadan tekshirish
+    global USER_SESSIONS
+    
+    uid = str(user_id)
+    
+    # 1. Avval global sessiyadan tekshirish
     if user_id in USER_SESSIONS:
-        return USER_SESSIONS[user_id].get('logged_in', False)
+        session = USER_SESSIONS[user_id]
+        
+        # Timestamp tekshirish
+        if 'timestamp' in session:
+            current_time = time.time()
+            session_time = session['timestamp']
+            
+            # 24 soat = 86400 sekund
+            if current_time - session_time > 86400:
+                print(f"❌ User {uid}: Global session muddati tugagan")
+                del USER_SESSIONS[user_id]
+                
+                # Fayldan ham o'chirish
+                sessions = load_sessions()
+                if uid in sessions:
+                    del sessions[uid]
+                    save_sessions(sessions)
+                
+                return False
+        
+        return session.get('logged_in', False)
     
-    # Fayldan yuklash
+    # 2. Fayldan yuklash
     sessions = load_sessions()
-    if str(user_id) in sessions:
-        USER_SESSIONS[user_id] = sessions[str(user_id)]
-        return sessions[str(user_id)].get('logged_in', False)
+    if uid in sessions:
+        session = sessions[uid]
+        
+        # Timestamp tekshirish
+        if 'timestamp' in session:
+            current_time = time.time()
+            session_time = session['timestamp']
+            
+            # 24 soat = 86400 sekund
+            if current_time - session_time > 86400:
+                print(f"❌ User {uid}: Fayl session muddati tugagan")
+                del sessions[uid]
+                save_sessions(sessions)
+                return False
+        
+        # Global sessiyaga qo'shish
+        USER_SESSIONS[user_id] = session
+        return session.get('logged_in', False)
     
+    print(f"❌ User {uid}: Session topilmadi")
     return False
 
 def get_user_role(user_id):

@@ -234,3 +234,12 @@ def get_user_words_count(user_id):
         return words
     except:
         return 0
+
+def block_user(user_id):
+    # Bu yerda foydalanuvchini bloklanganlar ro'yxatiga qo'shish kodi bo'ladi
+    # Masalan, database yoki json faylga status: blocked deb yozish
+    pass
+
+def unblock_user(user_id):
+    # Bu yerda blokdan chiqarish kodi
+    pass

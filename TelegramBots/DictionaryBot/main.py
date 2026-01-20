@@ -88,25 +88,36 @@ from admin.user_manager import save_user_info
 
 @bot.message_handler(commands=['start'])
 def start_handler(message):
-    """Bot ishga tushganda"""
     uid = message.from_user.id
     
-    # User ma'lumotlarini saqlash
+    # 1. User ma'lumotlarini saqlash
     save_user_info(
-        user_id=uid,
-        first_name=message.from_user.first_name,
-        last_name=message.from_user.last_name,
-        username=message.from_user.username
+        uid, 
+        message.from_user.first_name, 
+        message.from_user.last_name, 
+        message.from_user.username
     )
     
-    # Session tekshirish
+    # 2. Bloklanganlikni tekshirish
+    if is_user_blocked(uid):
+        bot.send_message(uid, get_text(uid, 'password_blocked'))
+        return
+
+    # 3. Login tekshirish
     if not is_logged_in(uid):
         bot.send_message(uid, get_text(uid, 'enter_password'), parse_mode="HTML")
-        bot.register_next_step_handler(message, password_handler)  # ✅ Bu qatorni qo'shing!
+        bot.register_next_step_handler(message, password_handler)
         return
     
-    # Asosiy menyu
-    bot.send_message(uid, get_text(uid, 'welcome'), reply_markup=get_main_keyboard(uid))
+    # 4. Welcome xabari (Hamma uchun bir xil)
+    bot.send_message(
+        uid, 
+        get_text(uid, 'welcome'), 
+        parse_mode="HTML", 
+        reply_markup=get_main_keyboard(uid)
+    )
+    
+    # 5. Help text yuborish (Hamma uchun)
     bot.send_message(uid, get_help_text(uid), parse_mode="HTML")
 
 def password_handler(message):
@@ -285,7 +296,6 @@ from admin.user_manager import (
 """
 DictionaryBot main.py - TO'LIQ CALLBACK HANDLER
 """
-
 @bot.callback_query_handler(func=lambda call: True)
 def callback_handler(call):
     """Barcha callback querylar"""
@@ -295,51 +305,77 @@ def callback_handler(call):
     data = call.data
 
     try:
-        # ============================================
-        # SOZLAMALAR - TIZIM HOLATI
-        # ============================================
+        # 1. SOZLAMALAR - TIZIM HOLATI
         if data == 'settings_status':
             stats = get_system_stats()
             msg = format_system_status(uid, stats)
-            bot.edit_message_text(
-                msg,
-                chat_id,
-                message_id,
-                parse_mode="HTML",
-                reply_markup=get_back_keyboard(uid, 'back_settings')
-            )
-            bot.answer_callback_query(call.id, "✅ Tizim holati")
-        
-        # ============================================
-        # SOZLAMALAR - FOYDALANUVCHILAR
-        # ============================================
-        elif data == 'settings_users':
-            users = get_all_users()
-            
-            if not users:
-                bot.answer_callback_query(
-                    call.id, 
-                    get_text(uid, 'no_users'), 
-                    show_alert=True
-                )
-                return
-            
-            # ✅ TO'LIQ MA'LUMOTLAR
-            msg = format_users_list(uid, users)
-            markup = get_users_keyboard(uid, users)
-            
-            bot.edit_message_text(
-                msg,
-                chat_id,
-                message_id,
-                parse_mode="HTML",
-                reply_markup=markup
-            )
+            bot.edit_message_text(msg, chat_id, message_id, parse_mode="HTML", reply_markup=get_back_keyboard(uid, 'back_settings'))
             bot.answer_callback_query(call.id)
         
-        # ============================================
-        # SOZLAMALAR - TIL
-        # ============================================
+        # 2. FOYDALANUVCHILAR RO'YXATI
+        elif data == 'settings_users':
+            users = get_all_users()
+            if not users:
+                bot.answer_callback_query(call.id, get_text(uid, 'no_users'), show_alert=True)
+                return
+            
+            msg = f"👥 <b>Foydalanuvchilar boshqaruvi</b>\n"
+            msg += f"━━━━━━━━━━━━━━━━━━━━━\n"
+            msg += f"📊 Jami foydalanuvchilar: <b>{len(users)}</b> ta\n\n"
+            msg += f"<i>Boshqarish uchun foydalanuvchini tanlang:</i>"
+            
+            markup = get_users_keyboard(uid, users)
+            bot.edit_message_text(msg, chat_id, message_id, parse_mode="HTML", reply_markup=markup)
+            bot.answer_callback_query(call.id)
+        
+        # 3. USER TAFSILOTLARI (FAQAT BU BITTA BO'LISHI KERAK!)
+        elif data.startswith('user_detail_'):
+            target_uid = data.split('_')[2]
+            details = get_user_details(target_uid)
+            
+            # Blok holati
+            is_blocked = is_user_blocked(int(target_uid))
+            status_text = "🚫 Bloklangan" if is_blocked else "✅ Faol"
+            
+            msg = format_user_details(uid, details)
+            msg += f"\n<b>Holati:</b> {status_text}"
+            
+            # Tugmalar
+            from telebot import types
+            markup = types.InlineKeyboardMarkup()
+            
+            b_text = "🔓 Blokdan chiqarish" if is_blocked else "🚫 Bloklash"
+            b_call = f"user_unblock_{target_uid}" if is_blocked else f"user_block_{target_uid}"
+            
+            markup.row(types.InlineKeyboardButton(b_text, callback_data=b_call))
+            markup.row(types.InlineKeyboardButton("📥 Lug'atni yuklash (JSON)", callback_data=f"user_export_{target_uid}"))
+            markup.row(types.InlineKeyboardButton("⬅️ Orqaga", callback_data="settings_users"))
+            
+            bot.edit_message_text(msg, chat_id, message_id, parse_mode="HTML", reply_markup=markup)
+            bot.answer_callback_query(call.id)
+
+        # 4. BLOKLASH/OCHISH
+        elif data.startswith(('user_block_', 'user_unblock_')):
+            target_uid = data.split('_')[2]
+            
+            # O'zini bloklashni oldini olish
+            if "user_block_" in data and str(target_uid) == str(uid):
+                bot.answer_callback_query(call.id, "O'zingizni bloklay olmaysiz! ❌", show_alert=True)
+                return
+            
+            if "user_block_" in data:
+                block_user(int(target_uid))
+                bot.answer_callback_query(call.id, "✅ Foydalanuvchi bloklandi")
+            else:
+                unblock_user(int(target_uid))
+                bot.answer_callback_query(call.id, "✅ Blokdan chiqarildi")
+            
+            # Ma'lumotni yangilash
+            new_call = call
+            new_call.data = f"user_detail_{target_uid}"
+            callback_handler(new_call)
+        
+        # 5. SOZLAMALAR - TIL
         elif data == 'settings_language':
             bot.edit_message_text(
                 get_text(uid, 'select_language'),
@@ -349,9 +385,7 @@ def callback_handler(call):
             )
             bot.answer_callback_query(call.id)
         
-        # ============================================
-        # SOZLAMALAR - BOT HAQIDA
-        # ============================================
+        # 6. SOZLAMALAR - BOT HAQIDA
         elif data == 'settings_about':
             bot.edit_message_text(
                 get_text(uid, 'about_bot'),
@@ -362,9 +396,7 @@ def callback_handler(call):
             )
             bot.answer_callback_query(call.id)
         
-        # ============================================
-        # SOZLAMALAR - PAROL O'ZGARTIRISH
-        # ============================================
+        # 7. SOZLAMALAR - PAROL
         elif data == 'settings_password':
             bot.edit_message_text(
                 "🔐 Parolni o'zgartirish:\n\n"
@@ -376,9 +408,7 @@ def callback_handler(call):
             )
             bot.answer_callback_query(call.id)
         
-        # ============================================
-        # TIL O'ZGARTIRISH
-        # ============================================
+        # 8. TIL O'ZGARTIRISH
         elif data.startswith('lang_'):
             lang = data.split('_')[1]
             set_user_language(uid, lang)
@@ -396,17 +426,14 @@ def callback_handler(call):
                 reply_markup=get_settings_keyboard(uid, is_admin(uid))
             )
             
-            # ✅ YANGI! Reply tugmalarni yangilash
+            # Reply tugmalarni yangilash
             bot.send_message(
                 uid,
                 get_text(uid, 'language_changed'),
                 reply_markup=get_main_keyboard(uid)
             )
-            
         
-        # ============================================
-        # TOPIKLAR
-        # ============================================
+        # 9. TOPIKLAR
         elif data.startswith('topic_'):
             topic_num = data.split('_')[1]
             topic_key = f"Topik-{topic_num}"
@@ -432,9 +459,7 @@ def callback_handler(call):
             )
             bot.answer_callback_query(call.id)
         
-        # ============================================
-        # BO'LIMLAR
-        # ============================================
+        # 10. BO'LIMLAR
         elif data.startswith('section_'):
             parts = data.split('_')
             topic_num = parts[1]
@@ -476,36 +501,13 @@ def callback_handler(call):
             )
             bot.answer_callback_query(call.id)
         
-        # ============================================
-        # USER TAFSILOTLARI
-        # ============================================
-        elif data.startswith('user_detail_'):
-            target_uid = data.split('_')[2]
-            
-            # ✅ TO'LIQ MA'LUMOTLAR
-            details = get_user_details(target_uid)
-            msg = format_user_details(uid, details)
-            
-            markup = get_user_detail_keyboard(uid, target_uid)
-            
-            bot.edit_message_text(
-                msg,
-                chat_id,
-                message_id,
-                parse_mode="HTML",
-                reply_markup=markup
-            )
-            bot.answer_callback_query(call.id)
-        
-        # ============================================
-        # USER FAYLINI EXPORT
-        # ============================================
+        # 11. USER EXPORT
         elif data.startswith('user_export_'):
             target_uid = data.split('_')[2]
             user_file = get_user_file(target_uid)
             
             if os.path.exists(user_file):
-                from admin.user_manager import get_user_info  # ✅ Import
+                from admin.user_manager import get_user_info
                 
                 user_info = get_user_info(target_uid)
                 full_name = f"{user_info['first_name']} {user_info['last_name']}".strip()
@@ -523,27 +525,7 @@ def callback_handler(call):
         
                 bot.answer_callback_query(call.id, "✅ Fayl yuborildi")
         
-        # ============================================
-        # USER STATISTIKASI
-        # ============================================
-        elif data.startswith('user_stats_'):
-            target_uid = data.split('_')[2]
-            
-            details = get_user_details(target_uid)
-            msg = format_user_details(uid, details)
-            
-            bot.edit_message_text(
-                msg,
-                chat_id,
-                message_id,
-                parse_mode="HTML",
-                reply_markup=get_back_keyboard(uid, f'user_detail_{target_uid}')
-            )
-            bot.answer_callback_query(call.id)
-        
-        # ============================================
-        # ORQAGA QAYTISH
-        # ============================================
+        # 12. ORQAGA QAYTISH
         elif data == 'back_main':
             bot.delete_message(chat_id, message_id)
             bot.answer_callback_query(call.id)
@@ -558,7 +540,6 @@ def callback_handler(call):
             bot.answer_callback_query(call.id)
         
         elif data == 'back_topics':
-            # Topiklar ro'yxatini qayta yuklash
             user_data = load_user_data(uid)
             topics = []
             for topic_key in user_data.keys():
@@ -581,6 +562,37 @@ def callback_handler(call):
     except Exception as e:
         print(f"Callback error: {e}")
         bot.answer_callback_query(call.id, "❌ Xatolik", show_alert=True)
+
+# ============================================
+# /STATUS KOMANDASI
+# ============================================
+
+@bot.message_handler(commands=['status'])
+def status_command_handler(message):
+    uid = message.from_user.id
+    
+    # 1. Login tekshirish
+    if not is_logged_in(uid):
+        bot.send_message(uid, get_text(uid, 'enter_password'))
+        return
+    
+    # 2. Admin tekshirish
+    if not is_admin(uid):
+        bot.send_message(uid, "❌ Bu buyruq faqat admin uchun!")
+        return
+    
+    # 3. Status yuborish
+    try:
+        stats = get_system_stats()
+        status_text = format_system_status(uid, stats)
+        bot.send_message(
+            uid, 
+            f"📊 <b>Tizim holati:</b>\n\n{status_text}", 
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        print(f"❌ Status xatolik: {e}")
+        bot.send_message(uid, f"❌ Xatolik: {e}")
 
 # ============================================
 # PAROL O'ZGARTIRISH BUYRUQLARI
@@ -627,44 +639,7 @@ def text_handler(message):
         bot.register_next_step_handler(message, password_handler)
         return
 
-    # ============================================
-    # 🏠 BOSH MENYU
-    # ============================================
-    if text == "/start":
-        from admin.user_manager import get_all_users, get_user_words_count  # ✅ Import qo'shildi
-        
-        # Statistika
-        all_users = get_all_users()
-        total_users = len(all_users)
-        
-        # User ma'lumotlari
-        user_data = load_user_data(uid)
-        
-        # Topiklar soni
-        topics_count = 0
-        for key in user_data.keys():
-            if key.startswith("Topik-"):
-                topics_count += 1
-        
-        # So'zlar soni
-        words_count = get_user_words_count(uid)  # ✅ Endi ishlaydi
-        
-        # Xabar
-        msg = get_text(
-            uid,
-            'home_stats',
-            users=total_users,
-            topics=topics_count,
-            words=words_count
-        )
-        
-        bot.send_message(
-            uid,
-            msg,
-            parse_mode="HTML",
-            reply_markup=get_main_keyboard(uid)
-        )
-        return
+    
     # Context tekshirish
     if uid not in user_context:
         user_context[uid] = {}
