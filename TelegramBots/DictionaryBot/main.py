@@ -1098,7 +1098,6 @@ def clean_old_backups():
 # ============================================
 if __name__ == "__main__":
     # Threading - Monitoringni alohida oqimda ishga tushirish
-    threading.Thread(target=auto_monitor, daemon=True).start()
     threading.Thread(target=clean_old_backups, daemon=True).start()
 
     try:
