@@ -1065,7 +1065,6 @@ def auto_monitor():
         try:
             if ADMIN_ID:
                 check_battery_warning(bot, ADMIN_ID)
-                check_ram_warning(bot, ADMIN_ID)
         except:
             pass
         time.sleep(600)
