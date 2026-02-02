@@ -49,9 +49,9 @@ pip-log.txt
 *.ipynb_checkpoints
 
 # --- Environment variables ---
-.env
-.env.*
-*.env
+# .env
+# .env.*
+# *.env
 
 # --- VSCode ---
 .vscode/
