@@ -4,32 +4,37 @@ import aiosqlite
 from pathlib import Path
 from aiogram import Bot, Dispatcher
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from datetime import datetime, timedelta
 
-# Loyiha yo'lini sozlash (importlar xato bermasligi uchun)
+# Loyiha yo'lini sozlash
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from src.utils.config import BOT_TOKEN
 from src.handlers import hd
+from src.handlers import hd_admin
 from src.database import db
 import src.keyboards.kbd as kbd
 
 async def send_morning_reminder(bot: Bot):
-    """Har kuni 05:00 da barcha foydalanuvchilarga eslatma yuborish"""
+    """Har kuni 05:00 da inline tugmalar bilan so'rov yuborish"""
     try:
         async with aiosqlite.connect(db.DB_PATH) as conn:
             async with conn.execute("SELECT user_id FROM users") as cursor:
                 users = await cursor.fetchall()
-                
+        
+        # Kecha sanasini aniqlash
+        yesterday = datetime.now() - timedelta(days=1)
+        yesterday_str = f"{yesterday.month}월 {yesterday.day}일"
+        
         for user in users:
             try:
                 await bot.send_message(
                     user[0], 
-                    "☀️ 좋은 아침입니다!\n오늘도 업무 기록을 잊지 마세요!",
-                    reply_markup=kbd.main_menu_inline(),
-                    parse_mode=None
+                    f"☀️ 좋은 아침입니다!\n\n어제 ({yesterday_str}) 근무 시간을 기록해주세요:",
+                    reply_markup=kbd.daily_report_inline()
                 )
             except Exception:
-                continue  # Botni bloklagan foydalanuvchilarni o'tkazib yuboradi
+                continue
     except Exception as e:
         print(f"Eslatma yuborishda xato: {e}")
 
@@ -40,7 +45,8 @@ async def main():
     # Botni sozlash
     bot = Bot(token=BOT_TOKEN)
     dp = Dispatcher()
-    dp.include_router(hd.router)
+    dp.include_router(hd_admin.admin_router)  # Admin router birinchi
+    dp.include_router(hd.router)  # Keyin oddiy router
 
     # Scheduler (Koreya vaqti bilan 05:00)
     scheduler = AsyncIOScheduler(timezone="Asia/Seoul")
@@ -48,6 +54,8 @@ async def main():
     scheduler.start()
 
     print("--- 봇이 시작되었습니다 (Korea Time Zone) ---")
+    print(f"현재 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("매일 오전 5시에 근무 시간 기록 알림이 전송됩니다.")
     
     try:
         await dp.start_polling(bot)

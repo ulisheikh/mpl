@@ -3,7 +3,7 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 import aiosqlite
-from datetime import datetime
+from datetime import datetime, timedelta
 from src.database import db
 from src.keyboards import kbd
 
@@ -13,10 +13,24 @@ class Form(StatesGroup):
     edit_manual_day = State()
     edit_rate = State()
     edit_tax = State()
+    daily_manual_input = State()
+
+# Hafta kunlarini olish funksiyasi
+def get_weekday_korean(date_obj):
+    """Berilgan sananing hafta kunini koreys tilida qaytaradi"""
+    weekdays = ["월", "화", "수", "목", "금", "토", "일"]
+    return weekdays[date_obj.weekday()]
 
 # --- START VA ASOSIY MENYU ---
 @router.message(F.text == "/start")
 async def cmd_start(message: Message):
+    # Foydalanuvchi ma'lumotlarini yangilash
+    await db.update_user_info(
+        message.from_user.id,
+        message.from_user.full_name,
+        message.from_user.username
+    )
+    
     await message.answer(
         "원하시는 메뉴를 선택해주세요:", 
         reply_markup=kbd.main_menu_inline()
@@ -46,7 +60,7 @@ async def show_settings(callback: CallbackQuery):
 """
     await callback.message.edit_text(text, reply_markup=kbd.settings_inline(), parse_mode=None)
 
-# --- SOATLIK TO'LOVNI TAHRIRLASH ---
+# --- SOATLIK TO'LOV ---
 @router.callback_query(F.data == "edit_rate")
 async def edit_rate_start(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer("💰 새로운 시급을 입력하세요 (예: 12500):")
@@ -73,7 +87,7 @@ async def process_edit_rate(message: Message, state: FSMContext):
     except ValueError:
         await message.answer("❌ 올바른 숫자를 입력해주세요.")
 
-# --- SOLIQNI TAHRIRLASH ---
+# --- SOLIQ ---
 @router.callback_query(F.data == "edit_tax")
 async def edit_tax_start(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer("📉 새로운 세금율을 입력하세요 (예: 3.3):")
@@ -100,7 +114,7 @@ async def process_edit_tax(message: Message, state: FSMContext):
     except ValueError:
         await message.answer("❌ 올바른 숫자를 입력해주세요.")
 
-# --- ISH KUNLARINI TAHRIRLASH ---
+# --- ISH KUNLARI ---
 @router.callback_query(F.data == "edit_workdays")
 async def edit_workdays_start(callback: CallbackQuery):
     user_id = callback.from_user.id
@@ -147,22 +161,33 @@ async def save_workdays(callback: CallbackQuery):
         reply_markup=kbd.main_menu_inline()
     )
 
-# --- KUNLIK TAHRIRLASH ---
+# --- KUNLIK TAHRIRLASH (KALENDAR) ---
 @router.callback_query(F.data == "edit_logs")
 async def show_calendar(callback: CallbackQuery):
     now = datetime.now()
     await callback.message.edit_text(
-        f"📅 {now.month}월 - 수정할 날짜를 선택하세요:", 
+        f"📅 {now.year}년 {now.month}월\n수정할 날짜를 선택하세요:", 
         reply_markup=kbd.edit_days_inline()
     )
 
 @router.callback_query(F.data.startswith("edit_day_"))
 async def select_day(callback: CallbackQuery):
     day = callback.data.split("_")[-1]
+    
+    # Hafta kunini aniqlash
+    now = datetime.now()
+    selected_date = datetime(now.year, now.month, int(day))
+    weekday = get_weekday_korean(selected_date)
+    
     await callback.message.edit_text(
-        f"📍 {day}일 근무 시간을 선택하세요:", 
+        f"📍 {now.month}월 {day}일 ({weekday})\n근무 시간을 선택하세요:", 
         reply_markup=kbd.select_hours_inline(day)
     )
+
+# Ignore callback (kalendar sarlavhasi uchun)
+@router.callback_query(F.data == "ignore")
+async def ignore_callback(callback: CallbackQuery):
+    await callback.answer()
 
 # --- SAQLASH ---
 @router.callback_query(F.data.startswith("save_"))
@@ -175,22 +200,35 @@ async def save_hours(callback: CallbackQuery):
     _, day, hours = parts
     user_id = callback.from_user.id
     work_date = datetime.now().strftime(f"%Y-%m-{int(day):02d}")
+    hours_float = float(hours)
 
     async with aiosqlite.connect(db.DB_PATH) as conn:
-        await conn.execute("""
-            INSERT INTO work_logs (user_id, work_date, hours) 
-            VALUES (?, ?, ?)
-            ON CONFLICT(user_id, work_date) DO UPDATE SET hours = excluded.hours
-        """, (user_id, work_date, float(hours)))
+        if hours_float == 0:
+            # 휴무 - 0 soat saqlash
+            await conn.execute("""
+                INSERT INTO work_logs (user_id, work_date, hours) 
+                VALUES (?, ?, ?)
+                ON CONFLICT(user_id, work_date) DO UPDATE SET hours = excluded.hours
+            """, (user_id, work_date, 0.0))
+        else:
+            await conn.execute("""
+                INSERT INTO work_logs (user_id, work_date, hours) 
+                VALUES (?, ?, ?)
+                ON CONFLICT(user_id, work_date) DO UPDATE SET hours = excluded.hours
+            """, (user_id, work_date, hours_float))
         await conn.commit()
 
-    await callback.answer(f"✅ {day}일 {hours}시간 저장완료!")
+    if hours_float == 0:
+        await callback.answer(f"✅ {day}일 휴무로 저장되었습니다!")
+    else:
+        await callback.answer(f"✅ {day}일 {hours}시간 저장완료!")
+    
     await callback.message.edit_text(
         "수정할 다른 날짜를 선택하세요:", 
         reply_markup=kbd.edit_days_inline()
     )
 
-# --- MANUAL INPUT ---
+# --- QO'LDA KIRITISH ---
 @router.callback_query(F.data.startswith("manual_edit_"))
 async def manual_input_start(callback: CallbackQuery, state: FSMContext):
     day = callback.data.split("_")[-1]
@@ -228,7 +266,7 @@ async def process_manual_input(message: Message, state: FSMContext):
     except ValueError:
         await message.answer("❌ 숫자만 입력해주세요.")
 
-# --- VIEW REPORT ---
+# --- KUNLIK HISOBOT (HAFTA KUNI BILAN) ---
 @router.callback_query(F.data == "view_report")
 async def view_report(callback: CallbackQuery):
     user_id = callback.from_user.id
@@ -257,10 +295,21 @@ async def view_report(callback: CallbackQuery):
         total_month_hours = 0
         
         for date_str, hours in rows:
+            # '2026-02-05' -> '05' qismini olish
             day_only = date_str.split('-')[-1]
-            report_lines.append(f"▫️ {day_only}일: {hours}시간")
-            total_month_hours += hours
+            
+            # Hafta kunini aniqlash
+            date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+            weekday = get_weekday_korean(date_obj)
+            
+            # 휴무 yoki soatlar
+            if hours == 0:
+                report_lines.append(f"▫️ {day_only}일 ({weekday}): 🏖 휴무")
+            else:
+                report_lines.append(f"▫️ {day_only}일 ({weekday}): {hours}시간")
+                total_month_hours += hours
         
+        # Hisob-kitoblar
         gross_pay = total_month_hours * hourly_rate
         tax_amount = gross_pay * (tax_rate / 100)
         net_pay = gross_pay - tax_amount
@@ -283,7 +332,76 @@ async def view_report(callback: CallbackQuery):
         await callback.answer()
         await callback.message.answer(text, reply_markup=kbd.main_menu_inline(), parse_mode=None)
 
-# --- USER INFO ---
+# --- KUNLIK AVTOMATIK SO'ROV (soat 05:00 da) ---
+@router.callback_query(F.data.startswith("daily_report_"))
+async def process_daily_report(callback: CallbackQuery, state: FSMContext):
+    parts = callback.data.split("_")
+    
+    if parts[-1] == "manual":
+        # Qo'lda kiritish
+        await callback.message.answer("⌨️ 어제 근무 시간을 입력해주세요 (예: 10.5):")
+        await state.set_state(Form.daily_manual_input)
+        return
+    
+    hours = float(parts[-1])
+    user_id = callback.from_user.id
+    
+    # MUHIM: Kecha kunini saqlash (ertalab 04:00 da ishdan chiqqan, 05:00 da so'ralayapti)
+    # 05:00 da so'ralsa, kecha kuniga yoziladi
+    yesterday = datetime.now() - timedelta(days=1)
+    work_date = yesterday.strftime("%Y-%m-%d")
+
+    async with aiosqlite.connect(db.DB_PATH) as conn:
+        await conn.execute("""
+            INSERT INTO work_logs (user_id, work_date, hours) 
+            VALUES (?, ?, ?)
+            ON CONFLICT(user_id, work_date) DO UPDATE SET hours = excluded.hours
+        """, (user_id, work_date, hours))
+        await conn.commit()
+
+    if hours == 0:
+        await callback.answer("✅ 휴무로 기록되었습니다!")
+        await callback.message.edit_text(
+            f"✅ 어제 ({yesterday.month}월 {yesterday.day}일) 휴무로 저장되었습니다.",
+            reply_markup=kbd.main_menu_inline()
+        )
+    else:
+        await callback.answer(f"✅ {hours}시간 기록되었습니다!")
+        await callback.message.edit_text(
+            f"✅ 어제 ({yesterday.month}월 {yesterday.day}일) {hours}시간이 저장되었습니다.",
+            reply_markup=kbd.main_menu_inline()
+        )
+
+@router.message(Form.daily_manual_input)
+async def process_daily_manual(message: Message, state: FSMContext):
+    try:
+        hours = float(message.text.replace(',', '.'))
+        
+        if hours < 0 or hours > 24:
+            await message.answer("❌ 0-24 사이의 시간을 입력해주세요.")
+            return
+        
+        user_id = message.from_user.id
+        yesterday = datetime.now() - timedelta(days=1)
+        work_date = yesterday.strftime("%Y-%m-%d")
+
+        async with aiosqlite.connect(db.DB_PATH) as conn:
+            await conn.execute("""
+                INSERT INTO work_logs (user_id, work_date, hours) 
+                VALUES (?, ?, ?)
+                ON CONFLICT(user_id, work_date) DO UPDATE SET hours = excluded.hours
+            """, (user_id, work_date, hours))
+            await conn.commit()
+
+        await message.answer(
+            f"✅ 어제 ({yesterday.month}월 {yesterday.day}일) {hours}시간이 저장되었습니다!",
+            reply_markup=kbd.main_menu_inline()
+        )
+        await state.clear()
+    except ValueError:
+        await message.answer("❌ 숫자만 입력해주세요.")
+
+# --- FOYDALANUVCHI MA'LUMOTLARI ---
 @router.message(F.text == "내 정보")
 async def user_info(message: Message):
     user_id = message.from_user.id
@@ -306,18 +424,17 @@ async def user_info(message: Message):
     text = f"""👤 내 정보
 
 📱 이름: {full_name}
+🆔 사용자명: @{username}
+🔢 ID: {user_id}
 
-⚙️ 현재 설정
+⚙️ 설정
 💰 시급: {hourly_rate:,}원
 📉 세금: {tax_rate}%
 📅 근무요일: {work_days}
 
--------------------------------------------
 📊 이번 달
 ⏱ 총 근무시간: {total_hours}시간
 💵 예상 실수령액: {(total_hours * hourly_rate * (1 - tax_rate/100)):,.0f}원
--------------------------------------------
-
 """
     
     await message.answer(text, parse_mode=None)
