@@ -55,6 +55,23 @@ def is_admin(user_id):
     """Foydalanuvchi admin ekanligini tekshirish"""
     return user_id == ADMIN_USER_ID
 
+async def is_user_active(user_id):
+    """Foydalanuvchi faol ekanligini tekshirish (bloklanmaganmi)"""
+    # Admin har doim faol
+    if is_admin(user_id):
+        return True
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT is_active FROM users WHERE user_id = ?",
+            (user_id,)
+        ) as cursor:
+            result = await cursor.fetchone()
+            if result:
+                return result[0] == 1
+            # Yangi user - faol hisoblanadi
+            return True
+
 async def get_user_full_info(user_id):
     """Foydalanuvchining barcha sozlamalarini olish"""
     async with aiosqlite.connect(DB_PATH) as db:
@@ -74,12 +91,26 @@ async def get_user_full_info(user_id):
             return row
 
 async def update_user_info(user_id, full_name=None, username=None):
-    """Foydalanuvchi ma'lumotlarini yangilash"""
+    """Foydalanuvchi ma'lumotlarini yangilash yoki yaratish"""
     async with aiosqlite.connect(DB_PATH) as db:
-        if full_name and username:
+        # Avval user borligini tekshiramiz
+        async with db.execute(
+            "SELECT user_id FROM users WHERE user_id = ?",
+            (user_id,)
+        ) as cursor:
+            exists = await cursor.fetchone()
+        
+        if exists:
+            # Update qilamiz
             await db.execute(
                 "UPDATE users SET full_name = ?, username = ? WHERE user_id = ?",
-                (full_name, username, user_id)
+                (full_name or '', username or '', user_id)
+            )
+        else:
+            # Insert qilamiz
+            await db.execute(
+                "INSERT INTO users (user_id, full_name, username) VALUES (?, ?, ?)",
+                (user_id, full_name or '', username or '')
             )
         await db.commit()
 

@@ -1,8 +1,10 @@
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardButton
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 import aiosqlite
+import calendar
 from datetime import datetime, timedelta
 from src.database import db
 from src.keyboards import kbd
@@ -24,16 +26,27 @@ def get_weekday_korean(date_obj):
 # --- START VA ASOSIY MENYU ---
 @router.message(F.text == "/start")
 async def cmd_start(message: Message):
-    # Foydalanuvchi ma'lumotlarini yangilash
+    user_id = message.from_user.id
+    
+    # Foydalanuvchi ma'lumotlarini yangilash yoki yaratish
     await db.update_user_info(
-        message.from_user.id,
+        user_id,
         message.from_user.full_name,
         message.from_user.username
     )
     
+    # Bloklangan userlarni tekshirish
+    if not await db.is_user_active(user_id):
+        await message.answer(
+            "🚫 차단된 사용자입니다.\n관리자에게 문의하세요.",
+            parse_mode=None
+        )
+        return
+    
     await message.answer(
         "원하시는 메뉴를 선택해주세요:", 
-        reply_markup=kbd.main_menu_inline()
+        reply_markup=kbd.main_menu_inline(),
+        parse_mode=None
     )
 
 @router.callback_query(F.data == "main_menu")
@@ -41,7 +54,8 @@ async def back_to_main(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     await callback.message.edit_text(
         "원하시는 메뉴를 선택해주세요:", 
-        reply_markup=kbd.main_menu_inline()
+        reply_markup=kbd.main_menu_inline(),
+        parse_mode=None
     )
 
 # --- SOZLAMALAR MENYUSI ---
@@ -164,11 +178,89 @@ async def save_workdays(callback: CallbackQuery):
 # --- KUNLIK TAHRIRLASH (KALENDAR) ---
 @router.callback_query(F.data == "edit_logs")
 async def show_calendar(callback: CallbackQuery):
+    """Kalendar - ishlangan kunlar bilan"""
+    user_id = callback.from_user.id
     now = datetime.now()
+    
+    # Ishlangan kunlarni olish
+    current_month = now.strftime('%Y-%m')
+    async with aiosqlite.connect(db.DB_PATH) as conn:
+        async with conn.execute(
+            "SELECT work_date, hours FROM work_logs WHERE user_id = ? AND work_date LIKE ?",
+            (user_id, f"{current_month}%")
+        ) as cursor:
+            work_data = await cursor.fetchall()
+    
+    # Kalendar yaratish
+    calendar_markup = await create_user_calendar_with_work(work_data, now)
+    
     await callback.message.edit_text(
-        f"📅 {now.year}년 {now.month}월\n수정할 날짜를 선택하세요:", 
-        reply_markup=kbd.edit_days_inline()
+        f"📅 {now.year}년 {now.month}월\n수정할 날짜를 선택하세요:\n\n• = 근무 기록됨 | 🏖 = 휴무",
+        reply_markup=calendar_markup,
+        parse_mode=None
     )
+
+async def create_user_calendar_with_work(work_data, now):
+    """Foydalanuvchi uchun ishlangan kunlar bilan kalendar"""
+    builder = InlineKeyboardBuilder()
+    
+    year = now.year
+    month = now.month
+    
+    # Ishlangan kunlarni dict ga olish
+    worked_days = {}
+    for date_str, hours in work_data:
+        day = int(date_str.split('-')[-1])
+        worked_days[day] = hours
+    
+    # Hafta kunlari sarlavhasi
+    weekday_headers = ["월", "화", "수", "목", "금", "토", "일"]
+    for header in weekday_headers:
+        builder.button(text=header, callback_data="ignore")
+    builder.adjust(7)
+    
+    # Oyning birinchi kuni
+    first_day = datetime(year, month, 1)
+    weekday = first_day.weekday()
+    
+    # Oyning kunlar soni
+    days_in_month = calendar.monthrange(year, month)[1]
+    
+    # Bo'sh joylar
+    buttons = []
+    for _ in range(weekday):
+        buttons.append(InlineKeyboardButton(text=" ", callback_data="ignore"))
+    
+    # Kunlarni qo'shish
+    current_day = now.day
+    for day in range(1, days_in_month + 1):
+        if day == current_day:
+            text = f"📍{day}"
+        elif day < current_day and day in worked_days:
+            # Ishlangan yoki dam olgan
+            if worked_days[day] == 0:
+                text = f"🏖{day}"  # Dam olgan
+            else:
+                text = f"•{day}"   # Ishlagan
+        elif day < current_day:
+            # Hech narsa yozilmagan
+            text = str(day)
+        else:
+            text = str(day)
+        
+        buttons.append(InlineKeyboardButton(
+            text=text, 
+            callback_data=f"edit_day_{day}"
+        ))
+    
+    # 7 tadan guruplash
+    for i in range(0, len(buttons), 7):
+        builder.row(*buttons[i:i+7])
+    
+    # Orqaga
+    builder.row(InlineKeyboardButton(text="⬅️ 메인으로", callback_data="main_menu"))
+    
+    return builder.as_markup()
 
 @router.callback_query(F.data.startswith("edit_day_"))
 async def select_day(callback: CallbackQuery):

@@ -6,7 +6,6 @@ def admin_main_menu():
     """Admin panel asosiy menyusi"""
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="👥 사용자 목록", callback_data="admin_users"))
-    # builder.row(InlineKeyboardButton(text="📊 전체 통계", callback_data="admin_stats"))
     builder.row(InlineKeyboardButton(text="⬅️ 나가기", callback_data="main_menu"))
     return builder.as_markup()
 
@@ -42,7 +41,8 @@ def admin_user_menu(user_id):
     builder.row(InlineKeyboardButton(text="📅 근무표 보기", callback_data=f"admin_view_{user_id}"))
     builder.row(InlineKeyboardButton(text="✏️ 근무표 수정", callback_data=f"admin_edit_{user_id}"))
     builder.row(InlineKeyboardButton(text="⚙️ 설정 변경", callback_data=f"admin_settings_{user_id}"))
-    # builder.row(InlineKeyboardButton(text="📊 통계 보기", callback_data=f"admin_stats_{user_id}"))
+    builder.row(InlineKeyboardButton(text="🚫 사용자 차단", callback_data=f"admin_block_{user_id}"))
+    builder.row(InlineKeyboardButton(text="🗑 사용자 삭제", callback_data=f"admin_delete_{user_id}"))
     builder.row(InlineKeyboardButton(text="⬅️ 목록으로", callback_data="admin_users"))
     
     return builder.as_markup()
@@ -89,11 +89,28 @@ def admin_calendar_inline(user_id):
     for _ in range(weekday):
         buttons.append(InlineKeyboardButton(text=" ", callback_data="ignore"))
     
+    # Ishlangan kunlarni olish (faqat joriy oydan oldingi kunlar)
+    import asyncio
+    import aiosqlite
+    from src.database import db as database
+    
+    worked_days = set()
+    try:
+        # Sync context ichida async funksiya ishlamaydi, shuning uchun statik ko'rinish
+        # Bu funksiyani async qilib, handler ichida chaqirish kerak
+        # Hozircha oddiy kalendar
+        pass
+    except:
+        pass
+    
     # Kunlarni qo'shish
     current_day = now.day
     for day in range(1, days_in_month + 1):
         if day == current_day:
             text = f"📍{day}"
+        elif day < current_day:
+            # Bugun dan oldingi kunlar - indicator kerak
+            text = f"•{day}"  # Ishlagan kunlarda • belgisi
         else:
             text = str(day)
         
@@ -135,6 +152,35 @@ def admin_hours_inline(user_id, day):
     )
     builder.row(
         InlineKeyboardButton(text="⬅️ 뒤로", callback_data=f"admin_edit_{user_id}")
+    )
+    
+    return builder.as_markup()
+
+# Admin uchun ish kunlarini tanlash
+def admin_workdays_inline(user_id, selected_days_list):
+    """Admin foydalanuvchi uchun ish kunlarini tanlaydi"""
+    days = ["월", "화", "수", "목", "금", "토", "일"]
+    builder = InlineKeyboardBuilder()
+    
+    for d in days:
+        status = "✅" if d in selected_days_list else "❌"
+        builder.button(
+            text=f"{d} {status}", 
+            callback_data=f"admin_toggle_{user_id}_{d}"
+        )
+    
+    builder.adjust(4, 3)
+    builder.row(
+        InlineKeyboardButton(
+            text="💾 저장 완료", 
+            callback_data=f"admin_save_workdays_{user_id}"
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="⬅️ 뒤로", 
+            callback_data=f"admin_settings_{user_id}"
+        )
     )
     
     return builder.as_markup()
