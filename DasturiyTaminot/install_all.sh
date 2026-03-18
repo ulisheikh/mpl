@@ -19,8 +19,9 @@ curl -fsS https://dl.brave.com/install.sh | sudo sh
 echo 'export EDITOR="micro"' >> ~/.bashrc
 echo 'alias nano="micro"' >> ~/.bashrc
 
-# 5. Telegram, VirtualBox va VS Code
+# 5. Telegram, VirtualBox va VS Code (Warningni tuzatish bilan)
 echo "--- Telegram, VirtualBox va VS Code o'rnatilmoqda ---"
+sudo rm -f /etc/apt/sources.list.d/vscode.list /etc/apt/sources.list.d/vscode.sources # Eskilarini tozalash
 sudo apt install telegram-desktop virtualbox -y
 wget -qO- https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > packages.microsoft.gpg
 sudo install -D -o root -g root -m 644 packages.microsoft.gpg /etc/apt/trusted.gpg.d/
@@ -28,16 +29,9 @@ sudo sh -c 'echo "deb [arch=amd64] https://packages.microsoft.com/repos/code sta
 sudo apt update && sudo apt install code -y
 rm packages.microsoft.gpg
 
-# 6. Koreys tili va Fcitx5 (Klaviatura)
-echo "--- Koreys tili va Fcitx5 sozlanmoqda ---"
-sudo apt install fonts-nanum* fonts-noto-cjk fcitx5 fcitx5-hangul fcitx5-config-qt im-config -y
-im-config -n fcitx5
-
-# 7. Cisco Packet Tracer uchun muhitni tayyorlash
-# (Eski Sicko Tracker papkasini o'chirib tashlaymiz)
-echo "--- Cisco Packet Tracer uchun kutubxonalar tayyorlanmoqda ---"
-rm -rf ~/sickotracker
-sudo apt install libdouble-conversion3 libqt5gui5 libqt5network5 libqt5widgets5 libqt5printsupport5 libqt5multimedia5 libqt5x11extras5 libqt5sql5 libqt5svg5 libqt5xml5 libqt5pdf5 -y
+# 6. Koreys tili hangul
+sudo apt update
+sudo apt install ibus ibus-hangul im-config -y
 
 # 8. Bluetooth Fix
 echo "--- Bluetooth qayta o'rnatilmoqda ---"
@@ -47,8 +41,7 @@ sudo systemctl enable bluetooth --now
 
 echo "--------------------------------------------------------"
 echo "--- SKRIPT YAKUNLANDI! ---"
-echo "--- 1. Kompyuterni REBOOT qiling. ---"
-echo "--- 2. Cisco Packet Tracer .deb faylini yuklab olgan bo'lsangiz: ---"
-echo "---    'sudo apt install ./CiscoPacketTracer.deb' deb yozing. ---"
-echo "--- 3. Koreys tili: Fcitx5-dan 'Hangul'ni qo'shing. ---"
+echo "--- 1. Kompyuterni REBOOT qiling (MUHIM!). ---"
+echo "--- 2. Rebootdan keyin 'fcitx5-configtool'ni oching. ---"
+echo "--- 3. 'Only Show Current Language'ni o'chirib, Hangul qo'shing. ---"
 echo "--------------------------------------------------------"
