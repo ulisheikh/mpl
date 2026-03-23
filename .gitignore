@@ -77,3 +77,65 @@ backups/
 *.backup
 *.bak
 backup_*.json
+
+# ================================
+#   JAVA / ECLIPSE PROJECTS
+# ================================
+
+# --- Compiled Class files (Lokalda yaratiladi) ---
+*.class
+*.log
+*.ctxt
+
+# --- Packaging (Push qilinmaydi) ---
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# --- Build Folders (Lokalda kompilyatsiya natijalari) ---
+bin/
+build/
+target/
+out/
+
+# --- Eclipse Metadata (Juda muhim: Bularni push qilmang) ---
+.metadata/
+.recommenders/
+bin/
+tmp/
+*.tmp
+*.bak
+*.swp
+*~
+.settings/
+.loadpath
+
+# --- Eclipse Project Files ---
+# Agar siz loyihani faqat o'zingiz emas, jamoa bilan yuritayotgan bo'lsangiz
+# quyidagi 2 ta faylni ba'zan push qilishadi, lekin odatda lokalda qolgani yaxshi:
+.project
+.classpath
+
+# --- External Libraries (Kutubxonalar) ---
+lib/
+# Eslatma: Agar kutubxonalarni qo'lda (Manual) qo'shgan bo'lsangiz, 
+# ba'zan 'lib/' papkasini push qilish kerak bo'ladi. 
+# Lekin Maven/Gradle ishlatsangiz, shart emas.
+
+# --- Maven / Gradle (Agar ishlatsangiz) ---
+.mvn/
+.gradle/
+build/
+target/
+
+# --- IntelliJ / VS Code (Boshqa muhitlar uchun) ---
+.idea/
+*.iml
+.vscode/
+
+# --- System Files ---
+.DS_Store
+Thumbs.db
