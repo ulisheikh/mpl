@@ -1,0 +1,136 @@
+NumPy metodh va funksiyalari BIGDATA IN SHINHAN
+================================================
+array.ndim
+	- arrayni nechi o'lchamligini ko'rsatadi
+	
+array.shape
+	- arrayni shaklini (shape) ko'rsatadi
+
+array.size
+	- arrayni ichidagi elementlar sonini ko'rsatadi
+
+array.dtype
+	- arrayni ma'lumot turinni ko'rsatadi
+
+np.zeros(qator,ustun)
+	- arrayni yaratib ichini 0 lar bilan berilgan 
+	shape da to'ldirib beradi
+
+np.ones(qator,ustun)
+	- arrayni yaratib ichini 1 lar bilan berilgan 
+	shape da to'ldirib beradi
+
+np.full((qator,ustun),qiymat)
+	- arrayni berilgan shape va qiymat orqali shakllantirib
+	yaratadi
+	
+np.eye(qiymat)
+	- berilgan qiymat kvadratida arrayni yaratib
+	 0 lar bilan to'ldiradi faqat diognali 1 bo'ladi
+	  
+np.arange(start,stop-1,step).reshape(3,4)
+	- sonlarni yaratib beradi reshape esa uni berilgan
+	shape da arrayga aylantirib beradi
+	
+	
+np.linspace(start,stop,points)
+	- berilgan oraliqni twng bo'laklarga bo'lish orqali
+	ko'rsatigan son miqdoridagi sonlarni qaytaradi
+			    stop-start 	  
+	formulasi-> qadam = ---------- 
+		            point - 1 
+		         
+np.logspace(start, stop, soni)
+	- logarifmik shkalada sonlar yaratadi (10^start dan 10^stop gacha)
+
+np.insert(array, index, qiymat, axis)
+	- arraydagi berilgan index ga yangi qiymat qo‘shadi
+	- axis=0 → qatorga, axis=1 → ustunga qo‘shadi
+
+np.flip(array, axis)
+	- arrayni teskari qiladi agar axis berilmasa
+	tepadan pastga ongdan chapga teskari qilib buradi
+	- axis=0 → yuqori-pastni almashtiradi
+	- axis=1 → chap-o‘ngni almashtiradi
+
+array.max()
+	- eng katta qiymatni qaytaradi
+
+array.min()
+	- eng kichik qiymatni qaytaradi
+
+array.mean()
+	- o‘rtacha qiymatni hisoblaydi
+
+array.astype(np.ma'lumot_turi)
+	- arrayni boshqa turga o‘tkazadi (int, float va h.k)
+
+array.flatten()
+	- 2D va 3D arrayni 1D ga aylantiradi
+
+array.T
+	- qatorni ustunga aylantiradi ustunni esa qatorga 
+				<--->
+
+array.sort()
+	- arrayni tartiblaydi (o‘sish tartibida)
+
+np.random.randint(start,stop,soni)
+	- berilgan oraliqda tasodifiy sonni beradi 
+	sonini ham kiritish mumkin
+
+np.random.rand(soni)
+	- 0 va 1 orasida tasodifiy sonlardan 
+	bittasini yoki soni bo'ycha qaytaradi (uniform)
+
+np.random.randn()
+	- normal taqsimot (mean=0, std=1)
+
+np.random.normal(mean, std, size)
+	- berilgan mean va std bilan normal sonlar
+
+np.random.uniform(min, max, size)
+	- berilgan oraliqda bir xil ehtimollikda sonlar
+
+np.random.shuffle(array)
+	- arrayni joyini aralashtiradi (original o‘zgaradi)
+
+np.random.permutation(array)
+	- aralashtirib yangi array qaytaradi (original o‘zgarmaydi)
+
+np.hstack((array1, array2))
+	- 2D arrayda hstack mos qatorlarni yoniga ulaydi
+	- 1D arrayda shunchaki bitta o'q bo'ylab yoniga qo'shib yuboradi
+	
+np.vstack((array1, array2))
+	- 1D da ham 2D da ham pastiga qo‘shadi (↓, 2D qiladi)
+
+np.concatenate((array1, array2), axis)
+	- universal qo‘shish (hstack ham, vstack ham bo‘la oladi)
+	  → lekin natija array o‘lchamiga bog‘liq
+
+	- 1D arrayda:
+	  → faqat axis=0 bor (uzunligi bo‘yicha qo‘shadi)
+	  → axis yozish shart emas
+
+	- 2D arrayda:
+	  → axis=0 → pastiga qo‘shadi (qatorlar ko‘payadi ↓)
+	  → axis=1 → yoniga qo‘shadi (ustunlar ko‘payadi →)
+
+	- axis=1 faqat 2D (yoki undan yuqori) da ishlaydi
+
+np.r_[array1, array2]
+	- 1D holatida shunchaki yoniga qo'shilib uzunligi oshadi
+	- 2D holatida ustunlarni qatorlarga olib tushadi qatorlar soni oshadi
+	  avval array1 barcha indexlari pastidan esa array2 indexlari tushadi
+
+np.c_[array1, array2]
+	- 1D holatda → har bir arrayni ustunga aylantirib, yoniga qo‘shadi 
+	 (2D hosil bo‘ladi)
+	- 2D holatda → mos qatorlarni yoniga qo‘shadi (ustunlar soni oshadi →)
+	
+np.append(array, qiymat, axis)
+	- 1D holatida axis siz va [] siz qo'shilsa shunchaki uzunligi oshadi
+	- 1D holatda ham agar arrayni [] olib axis berilsa 2D ga aylanib 
+	qator qo'shiladi
+	- agar 2d da ham axis bo‘lmasa → 1D qilib qo‘shadi (huddi flatten kabi)
