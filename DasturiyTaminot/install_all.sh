@@ -4,8 +4,7 @@ echo "--- Tizim yangilanmoqda ---"
 sudo apt update && sudo apt upgrade -y
 
 echo "--- Asosiy paketlar ---"
-sudo apt install -y micro wget curl unzip git python3 python3-pip \
-libgl1-mesa-glx libxcb-xinerama0
+sudo apt install -y micro wget curl unzip git python3 python3-pip \ libxcb-xinerama0
 
 echo "--- Brauzerlar ---"
 wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
